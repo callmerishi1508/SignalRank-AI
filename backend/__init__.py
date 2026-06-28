@@ -1,0 +1,1 @@
+# SignalRank AI — backend pipeline
