@@ -1,0 +1,291 @@
+# SignalRank AI — Scoring Configuration
+#
+# All scoring weights, thresholds, and tuning parameters live here.
+# No numeric constants should be hardcoded in backend/ modules.
+# To tune between submissions: edit this file only, no code changes needed.
+
+# ---------------------------------------------------------------------------
+# Semantic Retrieval Backend
+#
+# Primary backend: sentence embeddings + FAISS vector index.
+# Fallback backend: TF-IDF (scikit-learn), activated by backend_override
+# or when sentence-transformers / faiss-cpu are not installed.
+# ---------------------------------------------------------------------------
+semantic:
+  # "embedding" → use sentence-transformers + FAISS (default)
+  # "tfidf"     → force TF-IDF fallback (no FAISS, scores all candidates)
+  backend: "embedding"
+
+  embedding:
+    model_name: "sentence-transformers/all-MiniLM-L6-v2"
+    batch_size: 64
+    normalize_embeddings: true   # required for inner-product = cosine equivalence
+
+    # ---------- FAISS index ----------
+    faiss:
+      # "flat"  → IndexFlatIP (exact inner product; recommended for ≤500K vectors)
+      # "ivf"   → IndexIVFFlat (approximate; faster for very large datasets)
+      index_type: "flat"
+      nlist: 100     # IVF only: number of Voronoi clusters (rule of thumb: sqrt(N))
+      nprobe: 10     # IVF only: clusters searched at query time (higher = more accurate)
+
+      # Candidates returned by FAISS before rule-based reranking.
+      # Must be >> 100 to ensure recall. Default 1500 = 15× the required top-100.
+      top_k: 1500
+
+      # Title safety net: any candidate whose current_title matches a tier-1
+      # title token is included in the reranking pool regardless of FAISS rank.
+      # Prevents missing strong candidates who describe ML work without ML vocabulary.
+      title_safety_net: true
+
+      # Persist FAISS index to disk so subsequent runs skip rebuilding it.
+      # Index file: <cache.path>/index.faiss
+      persist_index: true
+
+    # Embedding cache (avoids re-encoding on subsequent runs)
+    cache:
+      enabled: true
+      path: "outputs/embedding_cache"   # directory; .npy files stored here
+
+    # Blend ratios when embedding backend is active
+    rule_blend: 0.75      # 75% rule-based reranking score
+    semantic_blend: 0.25  # 25% FAISS cosine similarity
+
+  # ---------------------------------------------------------------------------
+  # Reciprocal Rank Fusion (RRF)
+  # Merges the embedding ranking and TF-IDF ranking before rule-based reranking.
+  # final_rrf_score = Σ 1 / (k + rank_i)  for each retrieval strategy i
+  # ---------------------------------------------------------------------------
+  rrf:
+    enabled: true
+    k: 60                   # RRF smoothing constant (typical range: 30–120)
+    top_embedding_k: 3000   # candidates retrieved from FAISS before RRF merge
+    top_tfidf_k: 3000       # candidates retrieved from TF-IDF before RRF merge
+
+  tfidf:
+    # TF-IDF fallback: scores ALL candidates (no FAISS top-K selection).
+    # Activated when backend: "tfidf" or when faiss-cpu / sentence-transformers
+    # are not installed (auto-detected at startup).
+    ngram_range: [1, 2]
+    max_features: 8000
+    min_df: 2
+    sublinear_tf: true
+    # Blend ratios when TF-IDF backend is active
+    rule_blend: 0.85      # 85% rule-based score
+    semantic_blend: 0.15  # 15% TF-IDF cosine similarity (lower: TF-IDF is lexical only)
+
+# ---------------------------------------------------------------------------
+# Component Weights
+# Must sum to 1.0. Rebalance if evaluation reveals a weak component.
+# ---------------------------------------------------------------------------
+scoring:
+  component_weights:
+    title_role: 0.25
+    skill_match: 0.20
+    production_evidence: 0.15
+    behavioral: 0.15
+    experience_fit: 0.10
+    domain_fit: 0.10
+    location: 0.05
+
+  # Sub-weights within the behavioral component. Must sum to 1.0.
+  behavioral_sub_weights:
+    recency: 0.30
+    open_to_work: 0.15
+    response_rate: 0.20
+    notice_period: 0.15
+    interview_completion: 0.10
+    github_activity: 0.10
+
+  # -------------------------------------------------------------------------
+  # Skill Match Component
+  # -------------------------------------------------------------------------
+  skill:
+    # Proficiency level → multiplier applied to skill weight
+    proficiency_weights:
+      expert: 1.00
+      advanced: 0.80
+      intermediate: 0.55
+      beginner: 0.30
+
+    # Minimum Redrob skill assessment score to count as validated
+    assessment_score_threshold: 60
+
+    # How many required skills must match to earn full breadth score (1.0)
+    required_breadth_normalizer: 8
+
+    # Nice-to-have skills add a bonus, capped at this value
+    nice_to_have_bonus_cap: 0.15
+
+    # Skill duration depth bonus, capped at this value
+    depth_bonus_cap: 0.10
+
+    # months of NLP skill use for full depth bonus
+    depth_bonus_months_normalizer: 60
+
+  # -------------------------------------------------------------------------
+  # Production Evidence Component
+  # -------------------------------------------------------------------------
+  production_evidence:
+    # Distinct production keywords needed to earn full score
+    keywords_for_full_score: 4
+
+    # Each scale mention (e.g. "10M users", "5k QPS") adds this bonus
+    scale_match_bonus_per_hit: 0.07
+
+    # Maximum total scale bonus
+    scale_match_bonus_cap: 0.20
+
+    # Score returned when candidate has no career description text
+    empty_text_default: 0.10
+
+  # -------------------------------------------------------------------------
+  # Experience Fit Curve
+  # -------------------------------------------------------------------------
+  experience:
+    # Score when years_of_experience = 0
+    score_at_zero_yoe: 0.05
+
+    # For under-experienced candidates: score = ramp_base + ramp_multiplier * (yoe / ideal_min)
+    underexperienced_ramp_base: 0.30
+    underexperienced_ramp_multiplier: 0.70
+
+    # For over-experienced candidates: score reduces by this fraction per year beyond ideal_max
+    overqualified_penalty_per_year: 0.04
+
+  # -------------------------------------------------------------------------
+  # Behavioral: Recency of Activity
+  # Thresholds in days (inclusive upper bounds); last entry is the catch-all.
+  # Must have exactly one more score than threshold.
+  # -------------------------------------------------------------------------
+  behavioral_recency:
+    thresholds_days: [7, 30, 60, 120, 180]
+    scores:          [1.00, 0.85, 0.65, 0.35, 0.15, 0.02]
+
+  # Score for open_to_work_flag = false
+  behavioral_open_to_work_false_score: 0.25
+
+  # Score when github_activity_score = -1 (no GitHub linked)
+  behavioral_github_missing_score: 0.20
+
+  # -------------------------------------------------------------------------
+  # Behavioral: Notice Period Tiers
+  # Thresholds in days (inclusive upper bounds).
+  # -------------------------------------------------------------------------
+  behavioral_notice_period:
+    thresholds_days: [15, 30, 60, 90]
+    scores:          [1.00, 0.90, 0.60, 0.30, 0.05]
+
+  # Default score when redrob_signals is missing entirely
+  behavioral_missing_signals_default: 0.30
+
+  # -------------------------------------------------------------------------
+  # Location Scores
+  # -------------------------------------------------------------------------
+  location:
+    score_tier1_location: 1.00         # Pune, Noida, Delhi NCR, Gurgaon
+    score_tier2_location: 0.80         # Bangalore, Hyderabad, Mumbai, Chennai
+    score_willing_to_relocate_india: 0.65
+    score_india_default: 0.55
+    score_remote_or_flexible: 0.45
+    score_other: 0.20
+
+  # -------------------------------------------------------------------------
+  # Domain Fit Scores
+  # -------------------------------------------------------------------------
+  domain:
+    score_product_company: 0.90
+    score_large_neutral_company_multiplier: 0.50   # applied to product_company score
+    score_unclassified: 0.35
+    score_consulting: 0.15
+    fallback_no_career: 0.40
+    fallback_current_industry_match: 0.70
+    fallback_current_industry_no_match: 0.30
+
+  # -------------------------------------------------------------------------
+  # Title Role Scores
+  # -------------------------------------------------------------------------
+  title:
+    score_tier1_career_fraction: 1.00
+    score_tier2_career_fraction: 0.55
+    score_unrelated_career_fraction: 0.05
+    current_title_tier1_boost: 0.10
+    current_title_tier2_boost: 0.04
+    score_tier1_current_only: 0.90    # when no career history, title only
+    score_tier2_current_only: 0.50
+    score_unrelated_current_only: 0.05
+    score_unknown_current_only: 0.20
+
+# ---------------------------------------------------------------------------
+# Penalty Multipliers
+# ---------------------------------------------------------------------------
+penalties:
+  # Applied to honeypot candidates (score nearly zeroed)
+  honeypot_multiplier: 0.05
+
+  consulting_only:
+    # Fraction of total career months at consulting firms to trigger penalty
+    career_fraction_threshold: 0.85
+    penalty: 0.30                     # final_score *= (1 - penalty)
+
+  wrong_domain:
+    # Applied when current title is in UNRELATED_TITLE_TOKENS
+    # AND career history has no ML/AI titles at all
+    full_penalty: 0.45
+    # Applied when current title is unrelated but career has some ML history
+    partial_penalty: 0.10
+
+  cv_robotics_without_nlp:
+    # CV/speech/robotics skills present, required (NLP/IR) skills absent
+    full_penalty: 0.30
+    # CV/speech present, NLP present but outnumbered by CV
+    partial_penalty: 0.10
+
+  job_hopping:
+    # Number of job stints ≤ short_stint_months required before applying penalty
+    short_stint_months: 18
+    min_short_stints: 4
+    penalty: 0.10
+
+  behaviorally_unavailable:
+    # Both conditions must hold simultaneously
+    inactive_days_threshold: 180
+    response_rate_threshold: 0.10
+    penalty: 0.20
+
+# ---------------------------------------------------------------------------
+# Honeypot Detection Thresholds
+# ---------------------------------------------------------------------------
+honeypot:
+  # Overlapping concurrent jobs above this many days → flag
+  timeline_overlap_tolerance_days: 90
+
+  # A single overlap this large is a catastrophic flag (counts as 2 flags)
+  single_flag_knockout_overlap_days: 365
+
+  # Stated YOE vs actual career span: discrepancy above this → flag
+  yoe_discrepancy_threshold_years: 3.0
+
+  # Fraction of skills at "expert" proficiency to trigger flag
+  expert_skill_fraction_threshold: 0.90
+
+  # Endorsement count considered suspicious (each individual skill)
+  endorsement_suspicious_threshold: 900
+
+  # Number of skills with suspicious endorsements needed to flag
+  high_endorsement_count_min: 3
+
+  # If sum of duration_months > career_span * this factor → flag
+  duration_inflation_factor: 1.50
+
+  # Minimum career span (months) before checking duration inflation
+  min_career_span_months_for_duration_check: 12
+
+  # Education program longer than this → impossible flag
+  education_max_duration_years: 12
+
+  # Number of behavioral signals simultaneously at maximum → flag
+  perfect_behavioral_signals_threshold: 4
+
+  # Minimum distinct flags to classify as honeypot (unless single_flag_knockout applies)
+  min_flags_for_honeypot: 2
