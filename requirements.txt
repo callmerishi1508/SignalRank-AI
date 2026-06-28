@@ -1,0 +1,10 @@
+numpy==2.0.2
+scikit-learn==1.6.1
+sentence-transformers==5.1.2
+faiss-cpu==1.13.0
+PyYAML==6.0.3
+tqdm==4.68.3
+streamlit==1.50.0
+plotly==6.8.0
+python-dateutil==2.9.0.post0
+pandas==2.3.3

@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+ENV/
+
+# Testing and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# ML model caches and binary artifacts
+outputs/embedding_cache/
+*.npy
+*.faiss
+*.pkl
+*.pt
+*.bin
+
+# Generated debug/intermediate outputs (keep submission.csv and .gitkeep)
+outputs/debug*.json
+outputs/eval_report.json
+outputs/submission_cached*.csv
+
+# Logs
+*.log
+logs/
+
+# OS-generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V2
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
