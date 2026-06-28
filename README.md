@@ -50,6 +50,7 @@ signalrank-ai/
 ├── config/
 │   └── scoring.yaml            # ALL scoring parameters (weights, thresholds, tuning)
 ├── backend/
+│   ├── constants.py            # Shared constants (REFERENCE_DATE) — single source of truth
 │   ├── config_loader.py        # Config singleton — all modules import from here
 │   ├── candidate_parser.py     # CandidateProfile dataclass + JSONL loader
 │   ├── jd_parser.py            # Structured job profile + JD embedding text
