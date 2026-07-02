@@ -186,6 +186,8 @@ def _score_skill_match(candidate: Dict, jd: JobProfile, cfg=None) -> float:
     total_duration_nlp = 0.0
 
     for skill_obj in skills:
+        if isinstance(skill_obj, str):
+            skill_obj = {"name": skill_obj}
         raw_name = skill_obj.get("name", "")
         name = _normalise(raw_name)
         proficiency = _normalise(skill_obj.get("proficiency", "intermediate"))
@@ -329,13 +331,49 @@ def _score_behavioral(candidate: Dict, jd: JobProfile, cfg=None) -> Tuple[float,
         else sc.behavioral_github_missing_score
     )
 
+    # Response speed (avg_response_time_hours — lower = faster = better)
+    avg_rt = sig.get("avg_response_time_hours")
+    if avg_rt is not None:
+        sub_scores["response_speed"] = _tier_score(
+            float(avg_rt),
+            sc.behavioral_response_speed.thresholds_hours,
+            sc.behavioral_response_speed.scores,
+        )
+    else:
+        sub_scores["response_speed"] = sc.behavioral_response_speed_missing_score
+
+    # Recruiter demand (saved_by_recruiters_30d — how many recruiters bookmarked)
+    saved = sig.get("saved_by_recruiters_30d")
+    if saved is not None:
+        sub_scores["recruiter_demand"] = _tier_score(
+            int(saved),
+            sc.behavioral_recruiter_demand.thresholds,
+            sc.behavioral_recruiter_demand.scores,
+        )
+    else:
+        sub_scores["recruiter_demand"] = 0.30
+
+    # Active job seeking (applications_submitted_30d)
+    apps = sig.get("applications_submitted_30d")
+    if apps is not None:
+        sub_scores["active_seeking"] = _tier_score(
+            int(apps),
+            sc.behavioral_active_seeking.thresholds,
+            sc.behavioral_active_seeking.scores,
+        )
+    else:
+        sub_scores["active_seeking"] = 0.40
+
     behavioral = (
         bw.recency * sub_scores["recency"] +
         bw.open_to_work * sub_scores["open_to_work"] +
         bw.response_rate * sub_scores["response_rate"] +
+        bw.response_speed * sub_scores["response_speed"] +
         bw.notice_period * sub_scores["notice_period"] +
         bw.interview_completion * sub_scores["interview_completion"] +
-        bw.github_activity * sub_scores["github_activity"]
+        bw.github_activity * sub_scores["github_activity"] +
+        bw.recruiter_demand * sub_scores["recruiter_demand"] +
+        bw.active_seeking * sub_scores["active_seeking"]
     )
     return _clamp(behavioral), sub_scores
 
@@ -462,7 +500,9 @@ def _compute_penalty(candidate: Dict, jd: JobProfile, cfg=None) -> Tuple[float, 
             reasons.append("currently in non-technical role (has some ML history)")
 
     # 3. CV / speech / robotics without NLP/IR
-    all_skill_names = " ".join(_normalise(s.get("name", "")) for s in skills)
+    all_skill_names = " ".join(
+        _normalise(s.get("name", "") if isinstance(s, dict) else str(s)) for s in skills
+    )
     cv_hits = _contains_any(all_skill_names, jd.disqualifying_skill_domains)
     nlp_hits = _contains_any(all_skill_names, jd.required_skills)
     if cv_hits and not nlp_hits:
@@ -528,7 +568,10 @@ def _build_candidate_text(candidate: Dict) -> str:
         profile.get("summary", ""),
         profile.get("current_title", ""),
         profile.get("current_industry", ""),
-        " ".join(s.get("name", "") for s in candidate.get("skills", [])),
+        " ".join(
+            s.get("name", "") if isinstance(s, dict) else str(s)
+            for s in candidate.get("skills", [])
+        ),
         " ".join(
             f"{j.get('title', '')} {j.get('description', '')} {j.get('industry', '')}"
             for j in candidate.get("career_history", [])

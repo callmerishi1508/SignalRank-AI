@@ -5,6 +5,9 @@ Professional candidate ranking interface for the Redrob AI Challenge.
 Run: streamlit run app/streamlit_app.py
 """
 
+import csv as _csv
+import html as _html
+import io
 import json
 import os
 import sys
@@ -29,176 +32,432 @@ st.set_page_config(
 # ── Global CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIGNALRANK AI — PREMIUM DESIGN SYSTEM v3.0
+   Optimized for hackathon judges: clean, trustworthy, scannable
+══════════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-html, body, [class*="st-"], .stMarkdown, p, div {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+/* ── Global font ─────────────────────────────────────────────────────────── */
+html, body, [class*="st-"], .stMarkdown, p, div, span, label {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+[data-testid="stIconMaterial"] { font-family: 'Material Symbols Rounded' !important; }
+
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+:root {
+    /* Neutral */
+    --n900: #0F172A;  --n800: #1E293B;  --n700: #334155;
+    --n600: #475569;  --n500: #64748B;  --n400: #94A3B8;
+    --n300: #CBD5E1;  --n200: #E2E8F0;  --n100: #F1F5F9;  --n50:  #F8FAFC;
+    /* Blue */
+    --b700: #1D4ED8;  --b600: #2563EB;  --b500: #3B82F6;
+    --b200: #BFDBFE;  --b100: #DBEAFE;  --b50:  #EFF6FF;
+    /* Green */
+    --g700: #15803D;  --g600: #16A34A;
+    --g100: #DCFCE7;  --g50:  #F0FDF4;
+    /* Amber */
+    --a700: #B45309;  --a600: #D97706;
+    --a100: #FEF3C7;  --a50:  #FFFBEB;
+    /* Red */
+    --r700: #B91C1C;  --r600: #DC2626;
+    --r100: #FEE2E2;  --r50:  #FEF2F2;
+    /* Purple */
+    --p700: #6D28D9;  --p100: #EDE9FE;
+    /* Typography scale */
+    --t-xs:   0.7rem;    /* 11.2px — metadata, helper */
+    --t-sm:   0.8rem;    /* 12.8px — labels, captions */
+    --t-base: 0.875rem;  /* 14px   — body text */
+    --t-md:   0.9375rem; /* 15px   — slightly larger body */
+    --t-lg:   1.0625rem; /* 17px   — card titles */
+    --t-xl:   1.25rem;   /* 20px   — section headings */
+    --t-2xl:  1.625rem;  /* 26px   — large numbers */
+    --t-hero: 2.1rem;    /* 33.6px — hero title */
+    /* Radii */
+    --r-xs: 4px;  --r-sm: 6px;  --r-md: 10px;
+    --r-lg: 14px; --r-xl: 18px; --r-pill: 9999px;
+    /* Shadows */
+    --s-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --s-md: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+    --s-lg: 0 8px 24px rgba(0,0,0,.10), 0 4px 8px rgba(0,0,0,.04);
 }
 
-/* ─── Scrollbar ───────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #F8FAFC; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.block-container { padding-top: .85rem !important; }
+footer, #MainMenu, .stDeployButton { visibility: hidden; display: none; }
 
-/* ─── Header ─────────────────────────────────────────── */
-.sr-header {
-    background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 55%, #1D4ED8 100%);
-    padding: 1.6rem 2rem; border-radius: 16px; margin-bottom: 1.5rem;
-    box-shadow: 0 4px 20px rgba(29,78,216,.18);
-}
-.sr-header h1 {
-    color: #fff; font-size: 1.85rem; font-weight: 700; margin: 0;
-    letter-spacing: -0.6px; line-height: 1.2;
-}
-.sr-header p { color: #94A3B8; margin: .35rem 0 0; font-size: .9rem; line-height: 1.5; }
-.badge {
-    display: inline-block; background: rgba(59,130,246,.25); color: #93C5FD;
-    border: 1px solid rgba(147,197,253,.3);
-    padding: .12rem .6rem; border-radius: 999px; font-size: .7rem;
-    font-weight: 600; margin-left: .5rem; vertical-align: middle;
-    letter-spacing: .05em; text-transform: uppercase;
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--n300); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--n400); }
+
+/* ── Focus ring ──────────────────────────────────────────────────────────── */
+*:focus-visible {
+    outline: 2px solid var(--b500) !important;
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
 }
 
-/* ─── Metric cards ───────────────────────────────────── */
-.metric-card {
-    background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
-    padding: 1.15rem 1rem; text-align: center;
-    box-shadow: 0 1px 4px rgba(0,0,0,.04); transition: box-shadow .15s;
+/* ════════════════════════════════════════════════════════════════════════════
+   HERO BANNER
+════════════════════════════════════════════════════════════════════════════ */
+.sr-hero {
+    background: linear-gradient(135deg, #0A1628 0%, #0F2554 40%, #1447C7 85%, #2563EB 100%);
+    padding: 2rem 2.5rem 1.9rem;
+    border-radius: var(--r-xl);
+    margin-bottom: 1.4rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 6px 40px rgba(21,78,216,.28), 0 2px 8px rgba(0,0,0,.14);
 }
-.metric-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-.metric-value { font-size: 1.9rem; font-weight: 700; color: #0F172A; line-height: 1.1; }
-.metric-label { font-size: .72rem; color: #64748B; margin-top: .3rem; font-weight: 600;
-    letter-spacing: .04em; text-transform: uppercase; }
-.metric-sub   { font-size: .68rem; color: #94A3B8; margin-top: .15rem; }
+.sr-hero::after {
+    content: '';
+    position: absolute;
+    top: -50%; right: -8%;
+    width: 420px; height: 420px;
+    background: radial-gradient(circle, rgba(96,165,250,.15) 0%, transparent 65%);
+    pointer-events: none;
+}
+.sr-hero-eyebrow {
+    display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem;
+}
+.sr-hero-badge {
+    display: inline-flex; align-items: center; gap: .3rem;
+    background: rgba(96,165,250,.22);
+    color: #93C5FD;
+    border: 1px solid rgba(147,197,253,.35);
+    padding: .22rem .75rem;
+    border-radius: var(--r-pill);
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+.sr-hero-title {
+    color: #fff;
+    font-size: var(--t-hero);
+    font-weight: 800;
+    margin: 0 0 .5rem;
+    letter-spacing: -0.8px;
+    line-height: 1.15;
+}
+.sr-hero-title span { color: #93C5FD; }
+.sr-hero-divider {
+    width: 40px; height: 2px;
+    background: linear-gradient(90deg, #3B82F6, transparent);
+    border-radius: 2px;
+    margin-bottom: .55rem;
+}
+.sr-hero-sub {
+    color: rgba(255,255,255,.60);
+    font-size: .875rem;
+    line-height: 1.65;
+    margin: 0;
+    max-width: 700px;
+}
+.sr-hero-sub b { color: rgba(255,255,255,.88); font-weight: 600; }
 
-/* ─── Candidate card ─────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   KPI METRIC CARDS
+════════════════════════════════════════════════════════════════════════════ */
+.kpi-card {
+    background: #fff;
+    border: 1px solid var(--n200);
+    border-radius: var(--r-lg);
+    padding: 1.3rem 1rem 1.1rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--s-sm);
+    transition: box-shadow .18s, transform .18s;
+}
+.kpi-card:hover { box-shadow: var(--s-md); transform: translateY(-2px); }
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+.kpi-blue::before   { background: linear-gradient(90deg, #2563EB 0%, #60A5FA 100%); }
+.kpi-green::before  { background: linear-gradient(90deg, #16A34A 0%, #4ADE80 100%); }
+.kpi-amber::before  { background: linear-gradient(90deg, #D97706 0%, #FCD34D 100%); }
+.kpi-red::before    { background: linear-gradient(90deg, #DC2626 0%, #FCA5A5 100%); }
+.kpi-purple::before { background: linear-gradient(90deg, #6D28D9 0%, #A78BFA 100%); }
+.kpi-neutral::before { background: var(--n200); }
+
+.kpi-value {
+    font-size: clamp(1.5rem, 2.8vw, 2.2rem);
+    font-weight: 800;
+    color: var(--n900);
+    line-height: 1;
+    margin-bottom: .4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+}
+.kpi-label {
+    font-size: .68rem;
+    font-weight: 700;
+    color: var(--n500);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    margin-bottom: .2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kpi-sub {
+    font-size: .67rem;
+    color: var(--n400);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CANDIDATE CARDS
+════════════════════════════════════════════════════════════════════════════ */
 .cand-card {
-    background: #fff; border: 1px solid #E2E8F0; border-radius: 14px;
-    padding: 1.1rem 1.3rem; margin-bottom: .5rem;
-    transition: box-shadow .15s, border-color .15s, transform .1s;
+    background: #fff;
+    border: 1px solid var(--n200);
+    border-radius: var(--r-lg);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: .65rem;
+    transition: box-shadow .15s, border-color .12s, transform .1s;
 }
 .cand-card:hover {
-    box-shadow: 0 8px 24px rgba(0,0,0,.08);
-    border-color: #BFDBFE; transform: translateY(-1px);
+    box-shadow: var(--s-md);
+    border-color: var(--b200);
+    transform: translateY(-1px);
 }
+.cand-card-gold   { border-left: 4px solid #F59E0B !important; }
+.cand-card-silver { border-left: 4px solid #94A3B8 !important; }
+.cand-card-bronze { border-left: 4px solid #CD7F32 !important; }
 
+/* ── Rank badge ──────────────────────────────────────────────────────────── */
 .rank-badge {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 2.3rem; height: 2.3rem; border-radius: 50%;
-    font-weight: 700; font-size: .78rem; flex-shrink: 0;
-    letter-spacing: -.02em;
+    width: 2.5rem; height: 2.5rem; border-radius: 50%;
+    font-weight: 800; font-size: .8rem; flex-shrink: 0;
+    letter-spacing: -.03em;
 }
-.rb-gold   { background: linear-gradient(135deg,#FEF9C3,#FDE68A); color: #78350F;
-    box-shadow: 0 2px 6px rgba(251,191,36,.3); }
-.rb-silver { background: linear-gradient(135deg,#F1F5F9,#E2E8F0); color: #475569; }
-.rb-bronze { background: linear-gradient(135deg,#FFF7ED,#FED7AA); color: #9A3412; }
-.rb-plain  { background: #F8FAFC; color: #94A3B8; }
+.rb-gold   { background: linear-gradient(145deg,#FEF9C3,#FDE047); color: #78350F;
+    box-shadow: 0 2px 10px rgba(245,158,11,.35); }
+.rb-silver { background: linear-gradient(145deg,#F1F5F9,#CBD5E1); color: #334155;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.rb-bronze { background: linear-gradient(145deg,#FFF7ED,#FED7AA); color: #92400E;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.rb-plain  { background: var(--n100); color: var(--n400); }
 
+/* ── Score pills ─────────────────────────────────────────────────────────── */
 .score-pill {
-    background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE;
-    padding: .18rem .7rem; border-radius: 999px;
-    font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums;
+    background: var(--b50); color: var(--b700); border: 1.5px solid var(--b200);
+    padding: .22rem .85rem; border-radius: var(--r-pill);
+    font-size: .875rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
 }
-.score-pill-warn { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
-.score-pill-low  { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
+.score-pill-warn { background: var(--a50); color: #92400E; border-color: #FDE68A; }
+.score-pill-low  { background: var(--r50); color: var(--r700); border-color: var(--r100); }
 
+/* ── Score bars ──────────────────────────────────────────────────────────── */
+.bar-bg   { background: var(--n100); border-radius: 4px; height: 6px; margin-top: 4px; }
+.bar-fill { height: 6px; border-radius: 4px; transition: width .4s cubic-bezier(.4,0,.2,1); }
+.bar-bg-sm { background: var(--n100); border-radius: 3px; height: 4px; }
+
+/* ── Tags ────────────────────────────────────────────────────────────────── */
 .tag {
-    display: inline-block; padding: .1rem .48rem; border-radius: 5px;
-    font-size: .68rem; font-weight: 600; margin: .04rem .02rem;
+    display: inline-block; padding: .17rem .6rem; border-radius: var(--r-sm);
+    font-size: .72rem; font-weight: 600; margin: .05rem .04rem; line-height: 1.45;
+    white-space: nowrap;
 }
-.tag-hp     { background: #FEF2F2; color: #DC2626; }
-.tag-pen    { background: #FFF7ED; color: #C2410C; }
-.tag-active { background: #F0FDF4; color: #15803D; }
-.tag-conf   { background: #EFF6FF; color: #1D4ED8; }
-.tag-loc    { background: #F8FAFC; color: #475569; border: 1px solid #E2E8F0; }
-.tag-skill  { background: #F5F3FF; color: #6D28D9; border: 1px solid #DDD6FE; }
-.tag-miss   { background: #FEF2F2; color: #991B1B; }
+.tag-hp     { background: var(--r50); color: var(--r700); border: 1px solid var(--r100); }
+.tag-pen    { background: var(--a50); color: var(--a700); border: 1px solid var(--a100); }
+.tag-active { background: var(--g50); color: var(--g700); border: 1px solid var(--g100); }
+.tag-conf   { background: var(--b50); color: var(--b700); border: 1px solid var(--b100); }
+.tag-loc    { background: var(--n50); color: var(--n600); border: 1px solid var(--n200); }
+.tag-skill  { background: var(--p100); color: var(--p700); border: 1px solid #DDD6FE; }
+.tag-miss   { background: var(--r50); color: #991B1B; border: 1px solid var(--r100); }
 
-/* ─── Score bar ──────────────────────────────────────── */
-.bar-bg   { background: #EFF6FF; border-radius: 4px; height: 5px; margin-top: 3px; }
-.bar-fill { height: 5px; border-radius: 4px; transition: width .3s; }
-.bar-bg-sm { background: #F1F5F9; border-radius: 3px; height: 4px; }
-
-/* ─── Section label ──────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   SECTION LABELS
+════════════════════════════════════════════════════════════════════════════ */
 .section-label {
-    font-size: .7rem; font-weight: 700; color: #94A3B8;
-    letter-spacing: .09em; text-transform: uppercase; margin: .6rem 0 .3rem;
+    font-size: .7rem; font-weight: 700; color: var(--n400);
+    letter-spacing: .1em; text-transform: uppercase;
+    margin: .85rem 0 .45rem;
+    padding-bottom: .3rem;
+    border-bottom: 1px solid var(--n100);
+    display: block;
 }
 
-/* ─── Explainability panel ───────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   EVIDENCE CARDS
+════════════════════════════════════════════════════════════════════════════ */
 .evidence-card {
-    background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px;
-    padding: .75rem 1rem; margin-bottom: .5rem; font-size: .82rem;
-    line-height: 1.55;
+    background: var(--n50);
+    border: 1px solid var(--n200);
+    border-left: 3px solid var(--b500);
+    border-radius: var(--r-md);
+    padding: .85rem 1rem;
+    margin-bottom: .55rem;
+    font-size: var(--t-base);
+    line-height: 1.6;
 }
-.evidence-title { font-size: .72rem; font-weight: 700; color: #64748B;
-    letter-spacing: .07em; text-transform: uppercase; margin-bottom: .3rem; }
-.evidence-snippet { color: #374151; font-style: italic; }
-.evidence-meta { color: #64748B; font-size: .75rem; }
+.evidence-title {
+    font-size: .72rem; font-weight: 700; color: var(--n500);
+    letter-spacing: .07em; text-transform: uppercase; margin-bottom: .3rem;
+}
+.evidence-snippet { color: var(--n700); font-style: italic; font-size: var(--t-base); }
+.evidence-meta    { color: var(--n500); font-size: .78rem; }
 
-/* ─── Comparison view ────────────────────────────────── */
-.compare-header {
-    background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px;
-    padding: .7rem 1rem; margin-bottom: .75rem; font-weight: 600;
-    color: #0F172A; font-size: .9rem;
-}
-.compare-winner {
-    background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px;
-    padding: .5rem .9rem; font-size: .82rem; color: #15803D; font-weight: 600;
-}
-.compare-risk {
-    background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 10px;
-    padding: .5rem .9rem; font-size: .82rem; color: #9A3412;
-}
-
-/* ─── Sidebar ────────────────────────────────────────── */
-.sidebar-label {
-    font-size: .68rem; font-weight: 700; color: #94A3B8;
-    letter-spacing: .09em; text-transform: uppercase; margin: .9rem 0 .3rem;
-}
-
-/* ─── Alert banners ──────────────────────────────────── */
-.alert-warn {
-    background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px;
-    padding: .65rem 1rem; font-size: .83rem; color: #92400E; margin-bottom: .75rem;
-}
+/* ════════════════════════════════════════════════════════════════════════════
+   ALERT BANNERS  (left-border accent — premium SaaS pattern)
+════════════════════════════════════════════════════════════════════════════ */
 .alert-ok {
-    background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px;
-    padding: .65rem 1rem; font-size: .83rem; color: #15803D; margin-bottom: .75rem;
+    background: var(--g50); border: 1px solid var(--g100);
+    border-left: 4px solid var(--g600);
+    border-radius: var(--r-md);
+    padding: .75rem 1.1rem; font-size: var(--t-base); color: #14532D;
+    margin-bottom: .75rem; line-height: 1.55;
+}
+.alert-warn {
+    background: var(--a50); border: 1px solid var(--a100);
+    border-left: 4px solid var(--a600);
+    border-radius: var(--r-md);
+    padding: .75rem 1.1rem; font-size: var(--t-base); color: #78350F;
+    margin-bottom: .75rem; line-height: 1.55;
 }
 .alert-info {
-    background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px;
-    padding: .65rem 1rem; font-size: .83rem; color: #1D4ED8; margin-bottom: .75rem;
+    background: var(--b50); border: 1px solid var(--b100);
+    border-left: 4px solid var(--b600);
+    border-radius: var(--r-md);
+    padding: .75rem 1.1rem; font-size: var(--t-base); color: #1E3A5F;
+    margin-bottom: .75rem; line-height: 1.55;
 }
 
-/* ─── Component row ──────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPONENT SCORE ROW
+════════════════════════════════════════════════════════════════════════════ */
 .comp-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: .32rem 0; border-bottom: 1px solid #F8FAFC; font-size: .83rem;
+    padding: .35rem 0; border-bottom: 1px solid var(--n50);
+    font-size: var(--t-base);
 }
-.comp-name  { color: #374151; font-weight: 500; }
-.comp-wt    { color: #9CA3AF; font-size: .73rem; margin-left: .25rem; }
+.comp-name  { color: var(--n700); font-weight: 500; }
+.comp-wt    { color: var(--n400); font-size: .75rem; margin-left: .25rem; }
 .comp-score { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* ─── Confidence badge ───────────────────────────────── */
-.conf-high   { color: #15803D; font-weight: 700; }
-.conf-medium { color: #B45309; font-weight: 700; }
-.conf-low    { color: #DC2626; font-weight: 700; }
+/* ════════════════════════════════════════════════════════════════════════════
+   CONFIDENCE
+════════════════════════════════════════════════════════════════════════════ */
+.conf-high   { color: var(--g700); font-weight: 700; }
+.conf-medium { color: var(--a700); font-weight: 700; }
+.conf-low    { color: var(--r600); font-weight: 700; }
 
-/* ─── Hide Streamlit chrome ──────────────────────────── */
-footer, #MainMenu, .stDeployButton { visibility: hidden; display: none; }
-.block-container { padding-top: 1.2rem; }
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPARE VIEW
+════════════════════════════════════════════════════════════════════════════ */
+.compare-winner {
+    background: var(--g50); border: 1px solid var(--g100);
+    border-left: 4px solid var(--g600);
+    border-radius: var(--r-md);
+    padding: .8rem 1.1rem; font-size: .925rem; color: #14532D; font-weight: 600;
+    margin-bottom: .85rem; line-height: 1.5;
+}
+.compare-risk {
+    background: var(--a50); border: 1px solid var(--a100);
+    border-left: 4px solid var(--a600);
+    border-radius: var(--r-md);
+    padding: .75rem 1.1rem; font-size: var(--t-base); color: #78350F;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+════════════════════════════════════════════════════════════════════════════ */
+.sidebar-section {
+    font-size: .65rem; font-weight: 700; color: var(--n400);
+    letter-spacing: .12em; text-transform: uppercase;
+    margin: 1rem 0 .45rem;
+    padding-bottom: .25rem;
+    border-bottom: 1px solid var(--n100);
+    display: block;
+}
+.sidebar-info {
+    background: var(--n50); border: 1px solid var(--n200);
+    border-radius: var(--r-md);
+    padding: .75rem .9rem;
+    font-size: .78rem; color: var(--n600); line-height: 1.7;
+}
+.sidebar-info b { color: var(--n800); font-weight: 600; }
+.sidebar-info .si-row { display: flex; gap: .4rem; align-items: flex-start; margin-bottom: .1rem; }
+.sidebar-info .si-dot { color: var(--b500); font-size: .6rem; flex-shrink: 0; margin-top: .35rem; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TABS
+════════════════════════════════════════════════════════════════════════════ */
+button[data-testid="stTab"] p {
+    font-size: .875rem !important;
+    font-weight: 500 !important;
+    color: var(--n500) !important;
+    transition: color .12s;
+    letter-spacing: -.01em !important;
+}
+button[data-testid="stTab"]:hover p    { color: var(--n800) !important; }
+button[data-testid="stTab"][aria-selected="true"] p {
+    color: var(--b700) !important;
+    font-weight: 700 !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SHORTLIST / RECRUITER ACTIONS
+════════════════════════════════════════════════════════════════════════════ */
+.sl-badge {
+    display: inline-flex; align-items: center; gap: .25rem;
+    background: var(--b50); border: 1px solid var(--b200);
+    color: var(--b700); border-radius: var(--r-pill);
+    font-size: .72rem; font-weight: 600;
+    padding: .15rem .55rem;
+}
+button[data-testid="baseButton-secondary"] {
+    font-size: .78rem !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+    .sr-hero            { padding: 1.3rem 1.4rem 1.2rem; }
+    .sr-hero-title      { font-size: 1.45rem; letter-spacing: -.5px; }
+    .sr-hero-sub        { font-size: .82rem; }
+    .cand-card          { padding: 1rem 1.1rem; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
-for _k, _v in [("results", None), ("pipeline_stats", None), ("selected_idx", 0)]:
+for _k, _v in [
+    ("results", None),
+    ("pipeline_stats", None),
+    ("selected_idx", 0),
+    ("shortlist", set()),         # set of candidate_ids saved by recruiter
+    ("recruiter_notes", {}),      # candidate_id → note string
+    ("parsed_jd", None),          # ParsedJD from jd_parser.parse_jd_text()
+    ("jd_mode", "demo"),          # "demo" | "custom"
+]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+_e = _html.escape  # Escape user-supplied strings before embedding in unsafe_allow_html blocks
+
 
 def _score_color(score: float) -> str:
     if score >= 0.80: return "#10B981"
@@ -253,12 +512,43 @@ def run_pipeline_on_upload(uploaded_file) -> bool:
         return False
 
     first_lines = [ln.strip() for ln in content.splitlines() if ln.strip()][:3]
+
+    if not first_lines:
+        st.error("The uploaded file is empty. Please upload a non-empty candidates.jsonl file.")
+        return False
+
     for ln in first_lines:
         try:
-            json.loads(ln)
-        except json.JSONDecodeError as exc:
-            st.error(f"Invalid JSONL on line: {ln[:60]}… — {exc}")
+            obj = json.loads(ln)
+        except json.JSONDecodeError:
+            st.error(
+                "The file contains invalid JSON on one of the first lines. "
+                "Check that each line is a complete, valid JSON object."
+            )
             return False
+        if not isinstance(obj, dict):
+            st.error(
+                "Expected JSONL where each line is a JSON object (dict). "
+                f"Got {type(obj).__name__} instead. Check the file format."
+            )
+            return False
+
+    # Count valid candidate-looking lines before committing to the pipeline
+    all_lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    valid_count = 0
+    for ln in all_lines:
+        try:
+            obj = json.loads(ln)
+            if isinstance(obj, dict) and obj.get("candidate_id"):
+                valid_count += 1
+        except (json.JSONDecodeError, ValueError):
+            pass
+    if valid_count == 0:
+        st.error(
+            "No valid candidate records found in the file. "
+            "Each line must be a JSON object with a 'candidate_id' field matching the expected schema."
+        )
+        return False
 
     with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False, mode="w", encoding="utf-8") as tmp:
         tmp.write(content)
@@ -313,10 +603,162 @@ def run_pipeline_on_upload(uploaded_file) -> bool:
     except Exception as exc:
         status_text.empty()
         progress_bar.empty()
-        st.error(f"Pipeline failed: {exc}")
+        print(f"[SignalRank] pipeline error: {exc}", file=sys.stderr)
+        st.error(
+            "The pipeline could not process this file. "
+            "Verify each line is a JSON object with a 'candidate_id' field and retry."
+        )
         return False
     finally:
         os.unlink(tmp_path)
+
+
+def _run_pipeline_on_candidate_dicts(candidates: List[Dict]) -> bool:
+    """Write a list of candidate dicts to a temp JSONL file and run the pipeline."""
+    from rank import run_pipeline
+
+    if not candidates:
+        st.error("No candidates to rank.")
+        return False
+
+    out_csv = "outputs/submission.csv"
+    out_json = "outputs/debug.json"
+    os.makedirs("outputs", exist_ok=True)
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".jsonl", delete=False, mode="w", encoding="utf-8"
+    ) as tmp:
+        for c in candidates:
+            tmp.write(json.dumps(c, ensure_ascii=False) + "\n")
+        tmp_path = tmp.name
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    t0 = time.time()
+
+    stages = [
+        ("Parsing resumes", 15),
+        ("Detecting honeypots", 25),
+        ("Building semantic index", 65),
+        ("Scoring candidates", 80),
+        ("Generating explanations", 92),
+        ("Writing outputs", 100),
+    ]
+    try:
+        for stage_name, pct in stages[:2]:
+            status_text.markdown(
+                f'<div class="alert-info">⏳ <b>{stage_name}…</b></div>',
+                unsafe_allow_html=True,
+            )
+            progress_bar.progress(pct)
+            time.sleep(0.04)
+
+        run_pipeline(tmp_path, out_csv, out_json, no_cache=True)
+
+        for stage_name, pct in stages[2:]:
+            status_text.markdown(
+                f'<div class="alert-info">⏳ <b>{stage_name}…</b></div>',
+                unsafe_allow_html=True,
+            )
+            progress_bar.progress(pct)
+            time.sleep(0.03)
+
+        elapsed = time.time() - t0
+        status_text.markdown(
+            f'<div class="alert-ok">⚡ <b>Ranked {len(candidates)} candidates in {elapsed:.1f}s</b></div>',
+            unsafe_allow_html=True,
+        )
+        st.session_state.pipeline_stats = {"elapsed": elapsed, "csv": out_csv, "json": out_json}
+        return load_results_from_json(out_json)
+    except Exception as exc:
+        status_text.empty()
+        progress_bar.empty()
+        st.error(f"Pipeline error: {exc}")
+        return False
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def _run_pipeline_on_zip(zip_bytes: bytes, zip_name: str) -> bool:
+    """Extract PDF/DOCX/TXT files from a ZIP, parse resumes, run pipeline."""
+    import zipfile
+    from backend.resume_parser import parse_resume_files
+
+    with tempfile.TemporaryDirectory(prefix="signalrank_zip_") as tmpdir:
+        zip_path = Path(tmpdir) / zip_name
+        zip_path.write_bytes(zip_bytes)
+
+        with zipfile.ZipFile(zip_path) as zf:
+            supported = {".pdf", ".docx", ".doc", ".txt"}
+            members = [
+                m for m in zf.namelist()
+                if Path(m).suffix.lower() in supported
+                and not m.startswith("__MACOSX")
+            ]
+            if not members:
+                st.error("No PDF, DOCX, or TXT files found inside the ZIP.")
+                return False
+
+            extracted = []
+            for m in members:
+                zf.extract(m, tmpdir)
+                extracted.append(Path(tmpdir) / m)
+
+        st.info(f"Extracted {len(extracted)} resume file(s) from ZIP. Parsing…")
+
+        with st.spinner("Parsing resumes…"):
+            candidates = parse_resume_files(extracted)
+
+    errors = [c for c in candidates if "error" in c]
+    ok = [c for c in candidates if "error" not in c]
+    if errors:
+        st.warning(f"{len(errors)} resume(s) could not be parsed: "
+                   + ", ".join(e["filename"] for e in errors))
+
+    if not ok:
+        st.error("No resumes were successfully parsed.")
+        return False
+
+    return _run_pipeline_on_candidate_dicts(ok)
+
+
+def _run_pipeline_on_drive_link(link: str) -> bool:
+    """Download resumes from a public Google Drive folder and rank them."""
+    from backend.drive_downloader import download_drive_folder
+    from backend.resume_parser import parse_resume_files
+
+    status = st.empty()
+    try:
+        with st.spinner("Connecting to Google Drive…"):
+            files = download_drive_folder(
+                link,
+                progress_cb=lambda msg: status.info(msg),
+            )
+    except (ValueError, RuntimeError) as exc:
+        st.error(str(exc))
+        return False
+
+    status.info(f"Downloaded {len(files)} file(s). Parsing resumes…")
+
+    with st.spinner("Parsing resumes…"):
+        from backend.resume_parser import parse_resume_files
+        candidates = parse_resume_files(files)
+
+    errors = [c for c in candidates if "error" in c]
+    ok = [c for c in candidates if "error" not in c]
+    if errors:
+        st.warning(f"{len(errors)} resume(s) could not be parsed: "
+                   + ", ".join(e["filename"] for e in errors))
+
+    if not ok:
+        st.error("No resumes were successfully parsed.")
+        return False
+
+    status.success(f"Parsed {len(ok)} resume(s). Running pipeline…")
+    return _run_pipeline_on_candidate_dicts(ok)
 
 
 def _render_component_breakdown(scores: Dict, show_sem: bool = True):
@@ -370,31 +812,30 @@ def _render_behavioral_breakdown(beh_sub: Dict):
 def _render_skills_tags(skills: List[Dict], matched: List[str], missing: List[str]):
     """Render matched (green) and missing (red) skill tags."""
     matched_set = {s.lower() for s in matched}
-    html = '<div style="margin:.4rem 0">'
+    h = '<div style="margin:.4rem 0">'
     for s in skills[:8]:
         name = s.get("name", "")
         prof = s.get("proficiency", "")
         is_match = name.lower() in matched_set
         cls = "tag-skill" if is_match else "tag-loc"
-        title = f"{prof}" if prof else ""
-        html += f'<span class="tag {cls}" title="{title}">{name}</span> '
-    html += "</div>"
+        h += f'<span class="tag {cls}" title="{_e(prof)}">{_e(name)}</span> '
+    h += "</div>"
 
     if missing:
-        html += '<div class="section-label" style="margin-top:.5rem">Missing JD Skills</div>'
-        html += '<div style="margin:.25rem 0">'
+        h += '<div class="section-label" style="margin-top:.5rem">Missing JD Skills</div>'
+        h += '<div style="margin:.25rem 0">'
         for s in missing:
-            html += f'<span class="tag tag-miss">− {s}</span> '
-        html += "</div>"
+            h += f'<span class="tag tag-miss">− {_e(s)}</span> '
+        h += "</div>"
 
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(h, unsafe_allow_html=True)
 
 
 def _render_career_snippets(snippets: List[Dict]):
     for sn in snippets:
-        co = sn.get("company", "")
-        title = sn.get("title", "")
-        text = sn.get("snippet", "")
+        co = _e(sn.get("company", ""))
+        title = _e(sn.get("title", ""))
+        text = _e(sn.get("snippet", ""))
         has_prod = sn.get("has_production_evidence", False)
         prod_badge = '<span class="tag tag-active" style="font-size:.65rem">⚡ prod</span>' if has_prod else ""
         st.markdown(f"""
@@ -405,40 +846,327 @@ def _render_career_snippets(snippets: List[Dict]):
         """, unsafe_allow_html=True)
 
 
+# ── Full Profile Dialog ───────────────────────────────────────────────────────
+@st.dialog("Candidate Profile", width="large")
+def _show_full_profile_dialog(result: Dict):
+    snap    = result.get("profile_snapshot", {})
+    scores  = result.get("scores", {})
+    sig     = result.get("redrob_signals_snapshot", {})
+    beh_sub = result.get("behavioral_breakdown", {})
+    edu     = result.get("education_snapshot", {})
+    matched = result.get("matched_skills", [])
+    missing = result.get("missing_skills", [])
+    skills  = result.get("skills_snapshot", [])
+    snippets = result.get("career_snippets", [])
+    conf    = result.get("confidence", "Medium")
+
+    rank  = result["rank"]
+    cid   = result["candidate_id"]
+    score = result["final_score"]
+    color = _score_color(score)
+    conf_cls = _conf_class(conf)
+
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem">
+      <div class="rank-badge {_rank_class(rank)}">#{rank}</div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:700">{_e(snap.get('current_title',''))}</div>
+        <div style="font-size:.85rem;color:#64748B">
+          {_e(snap.get('current_company',''))} &nbsp;·&nbsp;
+          {snap.get('years_of_experience',0)}y exp &nbsp;·&nbsp;
+          <span style="font-family:monospace;font-size:.75rem;color:#94A3B8">{_e(cid)}</span>
+        </div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <span class="{_pill_class(score)}">{score:.3f}</span>
+        <div style="margin-top:.25rem"><span class="{conf_cls}">{conf}</span></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    reasoning = result.get("reasoning", "")
+    if reasoning:
+        st.markdown(f'<div style="font-size:.9rem;line-height:1.65;color:#334155;'
+                    f'background:#F8FAFC;border-radius:8px;padding:.75rem 1rem;'
+                    f'border-left:3px solid #3B82F6;margin-bottom:.75rem">{_e(reasoning)}</div>',
+                    unsafe_allow_html=True)
+
+    left, right = st.columns(2)
+
+    with left:
+        st.markdown('<div class="section-label">Score Breakdown</div>', unsafe_allow_html=True)
+        for lbl, key, wt in [
+            ("Title / Role Fit", "title_role", "25%"),
+            ("Skill Match",      "skill_match", "20%"),
+            ("Production",       "production_evidence", "15%"),
+            ("Behavioral",       "behavioral", "15%"),
+            ("Experience Fit",   "experience_fit", "10%"),
+            ("Domain / Company", "domain_fit", "10%"),
+            ("Location",         "location", "5%"),
+        ]:
+            v = scores.get(key, 0)
+            c = _score_color(v)
+            st.markdown(f"""
+            <div style="display:flex;justify-content:space-between;font-size:.8rem;padding:.15rem 0">
+              <span>{lbl} <span style="color:#9CA3AF;font-size:.7rem">({wt})</span></span>
+              <span style="font-weight:700;color:{c}">{v:.3f}</span>
+            </div>{_bar(v, c, 4)}""", unsafe_allow_html=True)
+        pen = scores.get("penalty", 0)
+        pen_reasons = result.get("penalty_reasons", [])
+        pen_color = "#DC2626" if pen > 0.05 else "#16A34A"
+        st.markdown(f"""
+        <div style="margin-top:.5rem;padding:.5rem .75rem;background:#F8FAFC;
+             border-radius:6px;font-size:.8rem;border:1px solid #E2E8F0">
+          Penalty: <b style="color:{pen_color}">{pen:.0%}</b> → Final: <b>{score:.3f}</b>
+          {'<br><span style="color:#92400E;font-size:.75rem">' + '; '.join(pen_reasons) + '</span>' if pen_reasons else ''}
+        </div>""", unsafe_allow_html=True)
+
+    with right:
+        if beh_sub:
+            st.markdown('<div class="section-label">Behavioral Signals</div>', unsafe_allow_html=True)
+            beh_labels = {
+                "recency": "Last Active", "open_to_work": "Open to Work",
+                "response_rate": "Response Rate", "response_speed": "Response Speed",
+                "notice_period": "Notice Period", "interview_completion": "Interview Completion",
+                "github_activity": "GitHub Activity", "recruiter_demand": "Recruiter Demand",
+                "active_seeking": "Active Seeking",
+            }
+            for k, v in beh_sub.items():
+                c = _score_color(v)
+                lbl = beh_labels.get(k, k.replace("_", " ").title())
+                st.markdown(f"""
+                <div style="display:flex;justify-content:space-between;font-size:.8rem;padding:.15rem 0">
+                  <span>{lbl}</span><span style="font-weight:700;color:{c}">{v:.2f}</span>
+                </div>{_bar(v, c, 4)}""", unsafe_allow_html=True)
+
+        raw_signals = []
+        rrr = sig.get("recruiter_response_rate")
+        if rrr is not None: raw_signals.append(f"Response rate: {rrr:.0%}")
+        notice = sig.get("notice_period_days")
+        if notice is not None: raw_signals.append(f"Notice: {int(notice)}d")
+        saved = sig.get("saved_by_recruiters_30d")
+        if saved is not None: raw_signals.append(f"Saved by {int(saved)} recruiters/mo")
+        github = sig.get("github_activity_score")
+        if github is not None: raw_signals.append(f"GitHub: {int(github)}/100")
+        otw = sig.get("open_to_work_flag")
+        if otw: raw_signals.append("Open to work ✓")
+        sal = sig.get("expected_salary_range_inr_lpa")
+        if sal: raw_signals.append(f"Expected: {sal} LPA")
+
+        if raw_signals:
+            st.markdown('<div class="section-label" style="margin-top:.5rem">Redrob Signals</div>',
+                        unsafe_allow_html=True)
+            sig_html = '<div style="margin:.3rem 0">'
+            for s in raw_signals:
+                sig_html += f'<span class="tag tag-loc" style="margin-bottom:.25rem">{_e(s)}</span> '
+            sig_html += "</div>"
+            st.markdown(sig_html, unsafe_allow_html=True)
+
+        if edu.get("degree"):
+            st.markdown('<div class="section-label" style="margin-top:.5rem">Education</div>',
+                        unsafe_allow_html=True)
+            tier_badge = (f' <span class="tag tag-active" style="font-size:.65rem">{_e(edu["tier"])}</span>'
+                          if edu.get("tier") in ("tier1", "tier2") else "")
+            st.markdown(f'<div style="font-size:.82rem">{_e(edu.get("degree",""))} '
+                        f'in {_e(edu.get("field",""))}<br>'
+                        f'<span style="color:#64748B">{_e(edu.get("institution",""))}</span>'
+                        f'{tier_badge}</div>', unsafe_allow_html=True)
+
+    if skills or matched or missing:
+        st.markdown('<div class="section-label" style="margin-top:.6rem">Skills</div>', unsafe_allow_html=True)
+        _render_skills_tags(skills, matched, missing)
+
+    if snippets:
+        st.markdown('<div class="section-label" style="margin-top:.6rem">Career Evidence</div>',
+                    unsafe_allow_html=True)
+        _render_career_snippets(snippets)
+
+    headline = result.get("headline", "")
+    if headline:
+        st.markdown(f'<div style="margin-top:.6rem;font-size:.82rem;color:#64748B;'
+                    f'font-style:italic">{_e(headline)}</div>', unsafe_allow_html=True)
+
+    sl_col, _ = st.columns([1, 3])
+    with sl_col:
+        _in_sl = cid in st.session_state.shortlist
+        _lbl = "📌 Remove from Shortlist" if _in_sl else "📌 Save to Shortlist"
+        if st.button(_lbl, key=f"dialog_sl_{cid}"):
+            if _in_sl:
+                st.session_state.shortlist.discard(cid)
+            else:
+                st.session_state.shortlist.add(cid)
+            st.rerun()
+
+
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="sr-header">
-  <h1>⚡ SignalRank AI <span class="badge">Redrob 2026</span></h1>
-  <p>Rank talent by fit, not keywords &nbsp;·&nbsp; Two-stage pipeline: semantic retrieval + hybrid evidence scoring + honeypot detection</p>
+<div class="sr-hero">
+  <div class="sr-hero-eyebrow">
+    <span class="sr-hero-badge">⚡ Redrob AI Challenge 2026</span>
+  </div>
+  <div class="sr-hero-title">SignalRank <span>AI</span></div>
+  <div class="sr-hero-divider"></div>
+  <p class="sr-hero-sub">
+    <b>Rank talent by fit, not keywords.</b> &nbsp;Two-stage hybrid pipeline:
+    semantic retrieval (FAISS + TF-IDF) → evidence scoring (7 components) → honeypot detection.
+  </p>
 </div>
 """, unsafe_allow_html=True)
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div class="sidebar-label">Run Pipeline</div>', unsafe_allow_html=True)
-    uploaded = st.file_uploader(
-        "Upload candidates.jsonl",
-        type=["jsonl", "json"],
-        help="Organizer-provided JSONL candidate dataset",
-        label_visibility="collapsed",
-    )
-    if uploaded:
-        if st.button("⚡ Rank Candidates", type="primary", use_container_width=True):
-            with st.spinner(""):
-                run_pipeline_on_upload(uploaded)
-    else:
-        st.button("⚡ Rank Candidates", type="primary", use_container_width=True, disabled=True)
 
-    st.markdown('<div class="sidebar-label">Load Existing Results</div>', unsafe_allow_html=True)
-    results_path = st.text_input("Results JSON", value="outputs/debug.json", label_visibility="collapsed")
+    # ── 1. Job Description ────────────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section">Job Description</div>', unsafe_allow_html=True)
+
+    _jd_tab_demo, _jd_tab_custom = st.tabs(["Demo JD", "Paste / Upload JD"])
+
+    with _jd_tab_demo:
+        st.markdown("""
+        <div class="sidebar-info">
+          <b>Senior AI Engineer</b>
+          <div class="si-row"><span class="si-dot">▸</span><span>Redrob AI · Series A</span></div>
+          <div class="si-row"><span class="si-dot">▸</span><span>Pune / Noida · Hybrid</span></div>
+          <div class="si-row"><span class="si-dot">▸</span><span>5–9 yrs ML/AI experience</span></div>
+          <div class="si-row"><span class="si-dot">▸</span><span>Embeddings · FAISS · NLP · RAG</span></div>
+          <div class="si-row"><span class="si-dot">▸</span><span>Production search/ranking required</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Use Demo JD", key="jd_use_demo", use_container_width=True):
+            from backend.jd_parser import set_active_jd
+            set_active_jd(None)
+            st.session_state.parsed_jd = None
+            st.session_state.jd_mode = "demo"
+            st.success("Using demo JD (Redrob Senior AI Engineer)")
+
+    with _jd_tab_custom:
+        _jd_file = st.file_uploader(
+            "Upload JD (.txt or .md)",
+            type=["txt", "md"],
+            key="jd_file_upload",
+            label_visibility="collapsed",
+        )
+        _jd_file_text = ""
+        if _jd_file is not None:
+            try:
+                _jd_file_text = _jd_file.read().decode("utf-8")
+            except Exception:
+                st.error("Could not read file. Upload a plain text (.txt) or markdown (.md) JD.")
+
+        _jd_textarea = st.text_area(
+            "Or paste your JD here",
+            value=_jd_file_text if _jd_file_text else st.session_state.get("_jd_saved_text", ""),
+            height=190,
+            placeholder="Paste any job description — Google, Amazon, any company.\n"
+                         "Skills, experience, locations are auto-extracted.",
+            label_visibility="collapsed",
+            key="jd_text_area",
+        )
+        # Persist typed text across reruns
+        st.session_state["_jd_saved_text"] = _jd_textarea
+
+        if st.button("Parse & Use This JD", key="jd_parse_btn",
+                     use_container_width=True, type="primary"):
+            _jd_to_parse = _jd_textarea.strip()
+            if not _jd_to_parse:
+                st.warning("Paste or upload a job description first.")
+            else:
+                from backend.jd_parser import parse_jd_text, set_active_jd
+                with st.spinner("Parsing…"):
+                    try:
+                        _parsed = parse_jd_text(_jd_to_parse)
+                        set_active_jd(_parsed)
+                        st.session_state.parsed_jd = _parsed.extracted
+                        st.session_state.jd_mode = "custom"
+                        st.success(f"Active JD: **{_parsed.profile.title}**")
+                    except Exception as _exc:
+                        st.error(f"Parse error: {_exc}")
+
+        if st.session_state.jd_mode == "custom" and st.session_state.parsed_jd:
+            _ex = st.session_state.parsed_jd
+            _skills_prev = ", ".join(_ex.get("required_skills", [])[:5])
+            _locs_prev = ", ".join(_ex.get("locations", [])[:3]) or "not specified"
+            st.markdown(f"""
+            <div class="sidebar-info" style="margin-top:.4rem">
+              <b style="color:#1D4ED8">{_e(str(_ex.get('title','Role')))}</b>
+              <div class="si-row"><span class="si-dot">▸</span>
+                <span>{_e(str(_ex.get('seniority','').title()))} · {_e(str(_ex.get('experience','?')))}</span></div>
+              <div class="si-row"><span class="si-dot">▸</span>
+                <span>{_e(_locs_prev)}</span></div>
+              <div class="si-row"><span class="si-dot">▸</span>
+                <span style="font-size:.77rem">{_e(_skills_prev)}{" …" if len(_ex.get("required_skills", [])) > 5 else ""}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── 2. Candidates Input ───────────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section">Candidates</div>', unsafe_allow_html=True)
+
+    _c_tab_jsonl, _c_tab_zip, _c_tab_drive = st.tabs(["JSONL", "ZIP of Resumes", "Google Drive"])
+
+    with _c_tab_jsonl:
+        st.caption("Upload a .jsonl file where each line is a candidate JSON record.")
+        _uploaded_jsonl = st.file_uploader(
+            "Upload candidates.jsonl",
+            type=["jsonl", "json"],
+            key="cand_jsonl_upload",
+            label_visibility="collapsed",
+        )
+        if _uploaded_jsonl:
+            if st.button("⚡ Rank Candidates", key="rank_jsonl",
+                         type="primary", use_container_width=True):
+                with st.spinner(""):
+                    run_pipeline_on_upload(_uploaded_jsonl)
+        else:
+            st.button("⚡ Rank Candidates", key="rank_jsonl_dis",
+                      type="primary", use_container_width=True, disabled=True)
+
+    with _c_tab_zip:
+        st.caption("Upload a ZIP file of PDF, DOCX, or TXT resumes. Each file = one candidate.")
+        _uploaded_zip = st.file_uploader(
+            "Upload resumes ZIP",
+            type=["zip"],
+            key="cand_zip_upload",
+            label_visibility="collapsed",
+        )
+        if _uploaded_zip:
+            if st.button("⚡ Parse & Rank Resumes", key="rank_zip",
+                         type="primary", use_container_width=True):
+                _run_pipeline_on_zip(_uploaded_zip.read(), _uploaded_zip.name)
+        else:
+            st.button("⚡ Parse & Rank Resumes", key="rank_zip_dis",
+                      type="primary", use_container_width=True, disabled=True)
+
+    with _c_tab_drive:
+        st.caption(
+            "Paste a public Google Drive folder link containing PDF/DOCX/TXT resumes.\n"
+            "The folder must be shared as **Anyone with the link → Viewer**."
+        )
+        _drive_link = st.text_input(
+            "Google Drive folder link",
+            placeholder="https://drive.google.com/drive/folders/…",
+            label_visibility="collapsed",
+            key="drive_link_input",
+        )
+        if st.button("⚡ Download & Rank", key="rank_drive",
+                     type="primary", use_container_width=True):
+            if not _drive_link.strip():
+                st.warning("Paste a Google Drive folder link first.")
+            else:
+                _run_pipeline_on_drive_link(_drive_link.strip())
+
+    # ── 3. Load Existing Results ───────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section">Load Existing Results</div>', unsafe_allow_html=True)
+    results_path = st.text_input("Results JSON", value="outputs/debug.json",
+                                 label_visibility="collapsed")
     if st.button("↑ Load from file", use_container_width=True):
         if load_results_from_json(results_path):
             st.success("Loaded")
         else:
             st.error("File not found or invalid.")
 
-    st.markdown('<div class="sidebar-label">Export</div>', unsafe_allow_html=True)
+    # ── 4. Export ──────────────────────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section">Export</div>', unsafe_allow_html=True)
     for label, path, mime in [
         ("📥 Submission CSV", "outputs/submission.csv", "text/csv"),
         ("📄 Full Debug JSON", "outputs/debug.json", "application/json"),
@@ -450,16 +1178,14 @@ with st.sidebar:
                 st.download_button(label, data=f.read(), file_name=p.name, mime=mime,
                                    use_container_width=True)
 
-    st.divider()
+    st.markdown('<div class="sidebar-section">System Info</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:.76rem; color:#64748B; line-height:1.75">
-    <b style="color:#0F172A">Architecture</b><br>
-    FAISS dense + TF-IDF → RRF → pool<br>
-    7-component rule scorer<br>
-    Honeypot detection (7 checks)<br>
-    all-MiniLM-L6-v2 embeddings<br><br>
-    <b style="color:#0F172A">Constraints</b><br>
-    CPU only · No network · &lt;20s cold
+    <div class="sidebar-info">
+      <b>Pipeline</b>
+      <div class="si-row"><span class="si-dot">▸</span><span>FAISS dense + TF-IDF → RRF fusion</span></div>
+      <div class="si-row"><span class="si-dot">▸</span><span>7-component evidence scorer</span></div>
+      <div class="si-row"><span class="si-dot">▸</span><span>15 of 23 Redrob signals used</span></div>
+      <div class="si-row"><span class="si-dot">▸</span><span>Honeypot detection (7 checks)</span></div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -470,14 +1196,15 @@ if st.session_state.results is None:
 
 if st.session_state.results is None:
     st.markdown("""
-    <div style="text-align:center;padding:4rem 0;color:#64748B">
-      <div style="font-size:3rem;margin-bottom:1rem">📂</div>
-      <div style="font-size:1.15rem;font-weight:700;color:#0F172A;margin-bottom:.5rem">
-        No results loaded
+    <div style="text-align:center;padding:5rem 2rem;color:#64748B">
+      <div style="font-size:3.2rem;margin-bottom:1.2rem;opacity:.75">⚡</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#0F172A;letter-spacing:-.02em;margin-bottom:.6rem">
+        Ready to rank candidates
       </div>
-      <div style="font-size:.9rem;line-height:1.7">
-        Upload <code>candidates.jsonl</code> and click <b>Rank Candidates</b>,<br>
-        or enter the path to an existing <code>outputs/debug.json</code> in the sidebar.
+      <div style="font-size:.9rem;line-height:1.8;max-width:420px;margin:0 auto;color:#475569">
+        Upload <code style="background:#F1F5F9;padding:.1rem .45rem;border-radius:4px;font-size:.82em;color:#1D4ED8">candidates.jsonl</code>
+        in the sidebar and click <strong style="color:#0F172A">Rank Candidates</strong>,<br>
+        or load an existing <code style="background:#F1F5F9;padding:.1rem .45rem;border-radius:4px;font-size:.82em;color:#1D4ED8">outputs/debug.json</code>.
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -501,29 +1228,34 @@ penalized = sum(1 for r in top100 if r.get("scores", {}).get("penalty", 0) > 0.0
 high_conf = sum(1 for r in top100 if r.get("confidence", "") == "High")
 
 c1, c2, c3, c4, c5 = st.columns(5)
+
+_hp_cls  = "kpi-green" if hp_count == 0 else ("kpi-amber" if hp_count <= 10 else "kpi-red")
+_pen_cls = "kpi-green" if penalized == 0 else "kpi-amber"
+_ml_cls  = "kpi-green" if top10_ml >= 8 else "kpi-amber"
+_hp_val  = f"✓ {hp_count}" if hp_count == 0 else f"⚠ {hp_count}"
+
 kpi_data = [
-    (c1, f"{top10_ml}/10", "ML/AI in Top-10",   "Target ≥ 8/10"),
-    (c2, f"{avg_top10:.3f}", "Avg Top-10 Score", "Out of 1.000"),
-    (c3, str(high_conf), "High Confidence", f"of 100 ranked"),
-    (c4, "✓ 0" if hp_count == 0 else f"⚠ {hp_count}", "Honeypots", ">10 = disqualified"),
-    (c5, str(penalized), "Penalized", "Consulting / wrong domain"),
+    (c1, f"{top10_ml}/10",      "ML/AI in Top-10",  "Target ≥ 8/10",           _ml_cls),
+    (c2, f"{avg_top10:.3f}",    "Avg Top-10 Score", "Out of 1.000",            "kpi-blue"),
+    (c3, str(high_conf),        "High Confidence",  f"of {len(top100)} ranked","kpi-purple"),
+    (c4, _hp_val,               "Honeypots",        ">10 = disqualified",      _hp_cls),
+    (c5, str(penalized),        "Penalized",        "Consulting / wrong domain", _pen_cls),
 ]
-for col, val, label, sub in kpi_data:
+for col, val, label, sub, color_cls in kpi_data:
     col.markdown(f"""
-    <div class="metric-card">
-      <div class="metric-value">{val}</div>
-      <div class="metric-label">{label}</div>
-      <div class="metric-sub">{sub}</div>
+    <div class="kpi-card {color_cls}">
+      <div class="kpi-value">{val}</div>
+      <div class="kpi-label">{label}</div>
+      <div class="kpi-sub">{sub}</div>
     </div>
     """, unsafe_allow_html=True)
 
 if st.session_state.pipeline_stats:
     stats = st.session_state.pipeline_stats
     st.markdown(f"""
-    <div class="alert-ok" style="margin-top:.75rem">
-    ⚡ Pipeline completed in <b>{stats['elapsed']:.1f}s</b> &nbsp;·&nbsp;
-    Backend: FAISS + TF-IDF (RRF) &nbsp;·&nbsp;
-    Output ready: <code>{stats['csv']}</code>
+    <div class="alert-ok" style="margin-top:.8rem">
+    ⚡ <b>Pipeline complete in {stats['elapsed']:.1f}s</b> &nbsp;·&nbsp;
+    Backend: FAISS + TF-IDF (RRF) &nbsp;·&nbsp; Output: <code>{stats['csv']}</code>
     </div>
     """, unsafe_allow_html=True)
 
@@ -535,16 +1267,16 @@ if hp_count > 10:
     </div>
     """, unsafe_allow_html=True)
 
-st.divider()
-
+st.markdown('<div style="height:.5rem"></div>', unsafe_allow_html=True)
 
 # ── Main tabs ─────────────────────────────────────────────────────────────────
-tab_shortlist, tab_detail, tab_compare, tab_insights, tab_eval = st.tabs([
+tab_shortlist, tab_detail, tab_compare, tab_insights, tab_eval, tab_saved = st.tabs([
     "📋 Ranked Shortlist",
     "🔍 Candidate Detail",
     "⚖️ Compare",
     "📊 Insights",
     "🧪 Evaluation",
+    f"📌 Saved ({len(st.session_state.shortlist)})",
 ])
 
 
@@ -554,34 +1286,73 @@ tab_shortlist, tab_detail, tab_compare, tab_insights, tab_eval = st.tabs([
 with tab_shortlist:
     hcol, fcol = st.columns([3, 1])
     with hcol:
-        st.markdown(
-            "**Top ranked candidates** for · Senior AI Engineer — Redrob AI Founding Team",
-            help="Ranked by hybrid score: 75% rule-based + 25% semantic similarity"
-        )
+        st.markdown("""
+        <div style="margin:.3rem 0 .2rem">
+          <span style="font-size:1rem;font-weight:700;letter-spacing:-.01em">
+            Top Candidates
+          </span>
+          <span style="font-size:.82rem;opacity:.65;margin-left:.6rem">
+            Senior AI Engineer — Redrob AI Founding Team
+          </span>
+          <span style="font-size:.73rem;opacity:.45;margin-left:.5rem;
+                font-style:italic">Hybrid score: 75% rule-based · 25% semantic</span>
+        </div>
+        """, unsafe_allow_html=True)
     with fcol:
-        show_n = st.selectbox("Show", [10, 25, 50, 100], label_visibility="collapsed")
+        show_n = st.selectbox("Show top", [10, 25, 50, 100], label_visibility="visible")
 
-    with st.expander("🔧 Filters", expanded=False):
-        f1, f2, f3, f4, f5 = st.columns(5)
+    with st.expander("🔧 Filters & Sort", expanded=False):
+        f1, f2, f3, f4 = st.columns([1.2, 1.2, 1.2, 1.4])
         with f1:
             min_score = st.slider("Min score", 0.0, 1.0, 0.0, 0.01)
+            filter_title = st.text_input("Title contains", "", placeholder="e.g. NLP, Senior")
         with f2:
-            filter_title = st.text_input("Title contains", "", placeholder="e.g. NLP")
-        with f3:
+            yoe_range = st.slider("Years of experience", 0, 20, (0, 20))
             filter_conf = st.selectbox("Confidence", ["All", "High", "Medium", "Low"])
+        with f3:
+            max_notice = st.slider("Max notice period (days)", 0, 180, 180)
+            min_behavioral = st.slider("Min behavioral score", 0.0, 1.0, 0.0, 0.05)
         with f4:
+            sort_by = st.selectbox("Sort by", [
+                "Final Score", "Title Fit", "Skill Match",
+                "Production Evidence", "Behavioral", "Experience Fit",
+                "Domain Fit", "Rank (default)",
+            ])
             hide_penalized = st.checkbox("Hide penalized")
-        with f5:
             hide_hp = st.checkbox("Hide honeypots", value=True)
+
+    _sort_key_map = {
+        "Final Score":          lambda r: -r["final_score"],
+        "Title Fit":            lambda r: -r.get("scores", {}).get("title_role", 0),
+        "Skill Match":          lambda r: -r.get("scores", {}).get("skill_match", 0),
+        "Production Evidence":  lambda r: -r.get("scores", {}).get("production_evidence", 0),
+        "Behavioral":           lambda r: -r.get("scores", {}).get("behavioral", 0),
+        "Experience Fit":       lambda r: -r.get("scores", {}).get("experience_fit", 0),
+        "Domain Fit":           lambda r: -r.get("scores", {}).get("domain_fit", 0),
+        "Rank (default)":       lambda r: r["rank"],
+    }
+
+    def _get_notice(r):
+        sig = r.get("redrob_signals_snapshot", {})
+        nd = sig.get("notice_period_days")
+        return nd if nd is not None else 9999
 
     filtered = [
         r for r in top100
         if r["final_score"] >= min_score
+        and yoe_range[0] <= r["profile_snapshot"].get("years_of_experience", 0) <= yoe_range[1]
         and (not filter_title or filter_title.lower() in r["profile_snapshot"]["current_title"].lower())
         and (filter_conf == "All" or r.get("confidence", "Medium") == filter_conf)
+        and _get_notice(r) <= max_notice
+        and r.get("scores", {}).get("behavioral", 0) >= min_behavioral
         and (not hide_penalized or r.get("scores", {}).get("penalty", 0) <= 0.05)
         and (not hide_hp or not r.get("is_honeypot", False))
-    ][:show_n]
+    ]
+
+    if sort_by != "Rank (default)":
+        filtered = sorted(filtered, key=_sort_key_map[sort_by])
+
+    filtered = filtered[:show_n]
 
     if not filtered:
         st.markdown("""
@@ -591,6 +1362,62 @@ with tab_shortlist:
           <span style="font-size:.85rem">Try relaxing the score threshold or removing title filters.</span>
         </div>
         """, unsafe_allow_html=True)
+
+    # Compute top-100 average scores for Key Differentiator comparison
+    _COMP_KEYS = ["title_role", "skill_match", "production_evidence", "behavioral", "experience_fit", "domain_fit"]
+    _avg_scores: Dict[str, float] = {}
+    if top100:
+        for k in _COMP_KEYS:
+            _avg_scores[k] = sum(r.get("scores", {}).get(k, 0) for r in top100) / len(top100)
+
+    def _differentiator_html(result: Dict) -> str:
+        scores = result.get("scores", {})
+        sig = result.get("redrob_signals_snapshot", {})
+        comp_labels = {
+            "title_role":           "Title/Role Fit",
+            "skill_match":          "Skill Depth",
+            "production_evidence":  "Production Evidence",
+            "behavioral":           "Behavioral Signals",
+            "experience_fit":       "Experience Fit",
+            "domain_fit":           "Domain Fit",
+        }
+        diffs = sorted(
+            [(k, scores.get(k, 0) - _avg_scores.get(k, 0), scores.get(k, 0), lbl)
+             for k, lbl in comp_labels.items()],
+            key=lambda x: -x[1]
+        )
+        html = '<div style="margin-top:.6rem">'
+        html += '<div class="section-label" style="margin-bottom:.35rem">⚡ Why This Rank</div>'
+        for k, diff, val, lbl in diffs[:2]:
+            diff_color = "#10B981" if diff >= 0 else "#EF4444"
+            diff_sign = "+" if diff >= 0 else ""
+            html += f"""
+            <div style="display:flex;align-items:center;gap:.5rem;margin:.2rem 0;font-size:.82rem">
+              <span style="color:#374151;min-width:8.5rem">{lbl}</span>
+              <span style="font-weight:700;color:{_score_color(val)}">{val:.3f}</span>
+              <span style="color:{diff_color};font-size:.7rem">({diff_sign}{diff:.3f} vs avg)</span>
+            </div>"""
+        # Key behavioral signals
+        behavioral_notes = []
+        rrr = sig.get("recruiter_response_rate")
+        if isinstance(rrr, (int, float)) and rrr >= 0.80:
+            behavioral_notes.append(f"{rrr:.0%} recruiter response rate")
+        saved = sig.get("saved_by_recruiters_30d")
+        if isinstance(saved, (int, float)) and saved >= 8:
+            behavioral_notes.append(f"saved by {int(saved)} recruiters/month")
+        notice = sig.get("notice_period_days")
+        if isinstance(notice, (int, float)) and notice <= 15:
+            behavioral_notes.append(f"{int(notice)}-day notice period")
+        elif isinstance(notice, (int, float)) and notice <= 30:
+            behavioral_notes.append(f"{int(notice)}-day notice period")
+        github = sig.get("github_activity_score")
+        if isinstance(github, (int, float)) and github >= 75:
+            behavioral_notes.append(f"GitHub activity {int(github)}/100")
+        if behavioral_notes:
+            notes_str = " · ".join(behavioral_notes[:3])
+            html += f'<div style="margin-top:.3rem;font-size:.78rem;color:#475569">{_e(notes_str)}</div>'
+        html += '</div>'
+        return html
 
     for result in filtered:
         rank  = result["rank"]
@@ -607,6 +1434,8 @@ with tab_shortlist:
         conf      = result.get("confidence", "Medium")
 
         tags = ""
+        if cid in st.session_state.shortlist:
+            tags += '<span class="sl-badge">📌 Shortlisted</span> '
         if is_hp:
             tags += '<span class="tag tag-hp">🚫 honeypot</span>'
         else:
@@ -617,31 +1446,31 @@ with tab_shortlist:
         if beh > 0.85:
             tags += '<span class="tag tag-active">● active</span>'
         if loc:
-            tags += f'<span class="tag tag-loc">📍 {loc}</span>'
+            tags += f'<span class="tag tag-loc">📍 {_e(loc)}</span>'
 
         score_class = _pill_class(score)
         color = _score_color(score)
-        rule_score = result.get("rule_based_score", score)
+        rank_accent = {1: "cand-card-gold", 2: "cand-card-silver", 3: "cand-card-bronze"}.get(rank, "")
 
-        # Main card HTML
+        # Main card HTML — all user-supplied strings escaped via _e()
         st.markdown(f"""
-        <div class="cand-card">
-          <div style="display:flex;align-items:flex-start;gap:.85rem">
+        <div class="cand-card {rank_accent}">
+          <div style="display:flex;align-items:flex-start;gap:.9rem">
             <div class="rank-badge {_rank_class(rank)}">#{rank}</div>
             <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin-bottom:.2rem">
-                <span style="font-weight:700;color:#0F172A;font-size:.97rem">{title}</span>
+              <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.25rem">
+                <span style="font-weight:700;color:#0F172A;font-size:1.0rem;letter-spacing:-.01em">{_e(title)}</span>
                 {tags}
               </div>
-              <div style="font-size:.76rem;color:#64748B;margin:.1rem 0">
-                <b>{cid}</b> &nbsp;·&nbsp; {yoe}y exp &nbsp;·&nbsp; {co}
+              <div style="font-size:.8rem;color:#64748B;margin:.05rem 0 .4rem">
+                {_e(co)} &nbsp;·&nbsp; {yoe}y exp &nbsp;·&nbsp;
+                <span style="font-family:monospace;font-size:.75rem;color:#94A3B8">{_e(cid)}</span>
               </div>
-              <div style="font-size:.82rem;color:#374151;margin-top:.4rem;line-height:1.55">{reasoning}</div>
+              <div style="font-size:.875rem;color:#334155;line-height:1.6">{_e(reasoning)}</div>
             </div>
-            <div style="flex-shrink:0;text-align:right;min-width:70px">
-              <span class="{score_class}">{score:.4f}</span>
+            <div style="flex-shrink:0;text-align:right;min-width:72px;padding-left:.5rem">
+              <span class="{score_class}">{score:.3f}</span>
               {_bar(score, color)}
-              <div style="font-size:.65rem;color:#94A3B8;margin-top:.2rem">rule {rule_score:.3f}</div>
             </div>
           </div>
         </div>
@@ -649,6 +1478,26 @@ with tab_shortlist:
 
         # Expandable "Why this candidate?" panel
         with st.expander("💡 Why this candidate?", expanded=False):
+            # Shortlist action row
+            _in_sl = cid in st.session_state.shortlist
+            _sl_col1, _sl_col2, _sl_col3 = st.columns([1.2, 1, 4])
+            with _sl_col1:
+                _btn_label = "📌 Remove" if _in_sl else "📌 Save to Shortlist"
+                if st.button(_btn_label, key=f"sl_{cid}"):
+                    if _in_sl:
+                        st.session_state.shortlist.discard(cid)
+                    else:
+                        st.session_state.shortlist.add(cid)
+                    st.rerun()
+            with _sl_col2:
+                if st.button("🔍 Full Profile", key=f"fp_{cid}"):
+                    st.session_state.selected_idx = rank - 1
+                    _show_full_profile_dialog(result)
+            with _sl_col3:
+                if _in_sl:
+                    st.markdown('<span style="color:#10B981;font-size:.82rem">✓ In shortlist</span>', unsafe_allow_html=True)
+
+            st.markdown("<hr style='margin:.4rem 0;border-color:#E2E8F0'>", unsafe_allow_html=True)
             e1, e2 = st.columns([1, 1])
 
             with e1:
@@ -678,21 +1527,21 @@ with tab_shortlist:
 
                 pen = scores_d.get("penalty", 0)
                 pen_reasons = result.get("penalty_reasons", [])
-                penalty_color = "#EF4444" if pen > 0.05 else "#10B981"
+                penalty_color = "#DC2626" if pen > 0.05 else "#16A34A"
                 st.markdown(f"""
-                <div style="margin-top:.6rem;padding:.5rem .75rem;background:#F8FAFC;
-                     border-radius:8px;font-size:.79rem;border:1px solid #E2E8F0">
+                <div style="margin-top:.65rem;padding:.6rem .85rem;background:#F8FAFC;
+                     border-radius:8px;font-size:.82rem;border:1px solid #E2E8F0">
                   Penalty: <b style="color:{penalty_color}">{pen:.0%}</b>
-                  &nbsp;→&nbsp; Final score: <b>{score:.4f}</b>
-                  {'<br><span style="color:#9A3412;font-size:.72rem">' + '; '.join(pen_reasons) + '</span>' if pen_reasons else ''}
+                  &nbsp;→&nbsp; Final: <b>{score:.3f}</b>
+                  {'<br><span style="color:#92400E;font-size:.75rem">' + '; '.join(pen_reasons) + '</span>' if pen_reasons else ''}
                 </div>
                 """, unsafe_allow_html=True)
 
                 sem = scores_d.get("tfidf_similarity", scores_d.get("semantic_similarity", 0))
                 conf_cls = _conf_class(conf)
                 st.markdown(f"""
-                <div style="margin-top:.5rem;font-size:.79rem;color:#374151">
-                  Semantic sim: <b>{sem:.3f}</b> &nbsp;·&nbsp;
+                <div style="margin-top:.5rem;font-size:.82rem;color:#475569">
+                  Semantic: <b style="color:#0F172A">{sem:.3f}</b> &nbsp;·&nbsp;
                   Confidence: <span class="{conf_cls}">{conf}</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -710,7 +1559,7 @@ with tab_shortlist:
                     displayed = matched[:6] + [s["name"] for s in skills_snap if s.get("name", "").lower() not in matched_set][:2]
                     for name in displayed[:8]:
                         cls = "tag-skill" if name.lower() in matched_set else "tag-loc"
-                        skill_html += f'<span class="tag {cls}">{name}</span> '
+                        skill_html += f'<span class="tag {cls}">{_e(name)}</span> '
                     skill_html += "</div>"
                     st.markdown(skill_html, unsafe_allow_html=True)
 
@@ -727,9 +1576,9 @@ with tab_shortlist:
                 if snippets:
                     st.markdown('<div class="section-label">Career Evidence</div>', unsafe_allow_html=True)
                     for sn in snippets[:2]:
-                        co_s = sn.get("company", "")
-                        t_s = sn.get("title", "")
-                        txt = sn.get("snippet", "")
+                        co_s = _e(sn.get("company", ""))
+                        t_s  = _e(sn.get("title", ""))
+                        txt  = _e(sn.get("snippet", ""))
                         has_p = sn.get("has_production_evidence", False)
                         prod_b = '<span class="tag tag-active" style="font-size:.62rem">⚡ prod</span>' if has_p else ""
                         st.markdown(f"""
@@ -744,6 +1593,24 @@ with tab_shortlist:
                       No enriched data. Re-run the pipeline to see evidence details.
                     </div>
                     """, unsafe_allow_html=True)
+
+            # Key Differentiator — full width below the 2-column evidence panel
+            if _avg_scores:
+                st.markdown(_differentiator_html(result), unsafe_allow_html=True)
+
+            # Recruiter Notes
+            st.markdown('<div class="section-label" style="margin-top:.6rem">Recruiter Notes</div>', unsafe_allow_html=True)
+            note_key = f"note_{cid}"
+            current_note = st.session_state.recruiter_notes.get(cid, "")
+            new_note = st.text_area(
+                label="note", label_visibility="collapsed",
+                value=current_note,
+                key=note_key,
+                placeholder="Add notes about this candidate (interview status, concerns, etc.)",
+                height=70,
+            )
+            if new_note != current_note:
+                st.session_state.recruiter_notes[cid] = new_note
 
         st.markdown("<div style='margin-bottom:.1rem'></div>", unsafe_allow_html=True)
 
@@ -773,27 +1640,28 @@ with tab_detail:
     rule_score = r.get("rule_based_score", r["final_score"])
 
     st.markdown(f"""
-    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;
-         padding:.85rem 1.2rem;margin-bottom:1rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap">
-      <div class="rank-badge {_rank_class(r['rank'])}" style="width:2.6rem;height:2.6rem;font-size:.85rem">
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-left:4px solid #2563EB;
+         border-radius:14px;padding:1.1rem 1.4rem;margin-bottom:1rem;
+         display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+         box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      <div class="rank-badge {_rank_class(r['rank'])}" style="width:2.75rem;height:2.75rem;font-size:.88rem">
         #{r['rank']}
       </div>
       <div style="flex:1;min-width:200px">
-        <div style="font-weight:700;font-size:1.05rem;color:#0F172A">{snap['current_title']}</div>
-        <div style="font-size:.8rem;color:#64748B;margin-top:.1rem">
-          {r['candidate_id']} &nbsp;·&nbsp; {snap.get('current_company','—')}
-          &nbsp;·&nbsp; {snap['years_of_experience']}y exp &nbsp;·&nbsp; {snap['location']}
+        <div style="font-weight:800;font-size:1.1rem;color:#0F172A;letter-spacing:-.02em;margin-bottom:.18rem">
+          {_e(snap['current_title'])}
         </div>
-        <div style="font-size:.78rem;color:#475569;margin-top:.2rem;font-style:italic">
-          {r.get('headline', '')}
+        <div style="font-size:.82rem;color:#64748B">
+          {_e(snap.get('current_company','—'))} &nbsp;·&nbsp; {snap['years_of_experience']}y exp
+          &nbsp;·&nbsp; {_e(snap['location'])}
+          &nbsp;·&nbsp; <span style="font-family:monospace;font-size:.75rem;color:#94A3B8">{_e(r['candidate_id'])}</span>
         </div>
+        {f'<div style="font-size:.82rem;color:#475569;margin-top:.25rem;font-style:italic">{_e(r.get("headline",""))}</div>' if r.get("headline") else ""}
       </div>
-      <div style="text-align:right">
-        <div style="font-size:1.7rem;font-weight:800;color:#1D4ED8">{r['final_score']:.4f}</div>
-        <div style="font-size:.72rem;color:#64748B">final score</div>
-        <div style="font-size:.78rem;margin-top:.2rem">
-          Confidence: <span class="{conf_cls}">{conf}</span>
-        </div>
+      <div style="text-align:right;padding-left:.5rem">
+        <div style="font-size:2rem;font-weight:800;color:#1D4ED8;letter-spacing:-.03em;line-height:1">{r['final_score']:.3f}</div>
+        <div style="font-size:.72rem;color:#64748B;margin:.2rem 0 .3rem;text-transform:uppercase;letter-spacing:.06em">Final Score</div>
+        <div style="font-size:.82rem">Confidence: <span class="{conf_cls}">{conf}</span></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -814,14 +1682,14 @@ with tab_detail:
         _render_component_breakdown(scores)
 
         pen = scores.get("penalty", 0)
-        pen_color = "#EF4444" if pen > 0.05 else "#10B981"
+        pen_color = "#DC2626" if pen > 0.05 else "#16A34A"
         st.markdown(f"""
-        <div style="margin-top:.8rem;padding:.6rem .85rem;background:#F8FAFC;
-             border-radius:10px;font-size:.81rem;border:1px solid #E2E8F0">
+        <div style="margin-top:.8rem;padding:.65rem .9rem;background:#F8FAFC;
+             border-radius:10px;font-size:.82rem;border:1px solid #E2E8F0">
           Penalty: <b style="color:{pen_color}">{pen:.0%}</b>
-          &nbsp;·&nbsp; Rule score: <b>{rule_score:.4f}</b>
-          &nbsp;·&nbsp; Semantic sim: <b>{sem_val:.4f}</b>
-          <br><span style="color:#64748B;font-size:.73rem">
+          &nbsp;·&nbsp; Rule: <b>{rule_score:.3f}</b>
+          &nbsp;·&nbsp; Semantic: <b>{sem_val:.3f}</b>
+          <br><span style="color:#94A3B8;font-size:.72rem">
             Final = (0.75 × rule + 0.25 × semantic) × (1 − penalty)
           </span>
         </div>
@@ -854,8 +1722,8 @@ with tab_detail:
                 st.markdown(f"""
                 <div style="display:flex;justify-content:space-between;align-items:center;
                      padding:.25rem 0;border-bottom:1px solid #F8FAFC;font-size:.8rem">
-                  <span style="color:{color};font-weight:{'600' if is_match else '400'}">{match_icon}{name}</span>
-                  <span style="color:#64748B;font-size:.72rem">{prof} · {end} end.</span>
+                  <span style="color:{color};font-weight:{'600' if is_match else '400'}">{match_icon}{_e(name)}</span>
+                  <span style="color:#64748B;font-size:.72rem">{_e(prof)} · {end} end.</span>
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -878,8 +1746,8 @@ with tab_detail:
             tier_label = f" · {tier.replace('_', ' ').title()}" if tier else ""
             st.markdown(f"""
             <div class="evidence-card">
-              <div style="font-weight:600;color:#0F172A;font-size:.85rem">{edu.get('degree','')} in {edu.get('field','')}</div>
-              <div style="color:#64748B;font-size:.78rem">{edu.get('institution','')}{tier_label}</div>
+              <div style="font-weight:600;color:#0F172A;font-size:.85rem">{_e(edu.get('degree',''))} in {_e(edu.get('field',''))}</div>
+              <div style="color:#64748B;font-size:.78rem">{_e(edu.get('institution',''))}{_e(tier_label)}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -890,7 +1758,7 @@ with tab_detail:
         st.markdown(f"""
         <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;
              padding:.8rem 1rem;font-size:.85rem;color:#1E3A5F;line-height:1.6">
-          {reasoning}
+          {_e(reasoning)}
         </div>
         """, unsafe_allow_html=True)
 
@@ -961,8 +1829,9 @@ with tab_compare:
 
         st.markdown(f"""
         <div class="compare-winner">
-          🏆 Recommendation: <b>#{winner_rank} {winner_id}</b> scores higher by {delta:.4f}
-          &nbsp;·&nbsp; Score: {max(sa, sb):.4f} vs {min(sa, sb):.4f}
+          🏆 &nbsp;<b>#{winner_rank} {_e(winner_id)}</b> is the stronger candidate
+          &nbsp;·&nbsp; Scores: <b>{max(sa, sb):.3f}</b> vs {min(sa, sb):.3f}
+          &nbsp;(Δ {delta:.4f})
         </div>
         """, unsafe_allow_html=True)
 
@@ -977,24 +1846,29 @@ with tab_compare:
 
             st.markdown(f"""
             <div style="border:2px solid {border_color};border-radius:14px;
-                 padding:1rem 1.2rem;background:{bg_color};margin-bottom:.75rem">
+                 padding:1.1rem 1.3rem;background:{bg_color};margin-bottom:.75rem;
+                 box-shadow:{'0 4px 16px rgba(37,99,235,.1)' if is_winner else 'none'}">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-                <span style="font-size:.72rem;font-weight:700;color:#64748B;text-transform:uppercase;
-                      letter-spacing:.07em">{label}</span>
-                {'<span class="tag tag-active">★ Higher Ranked</span>' if is_winner else ''}
+                <span style="font-size:.68rem;font-weight:700;color:#64748B;text-transform:uppercase;
+                      letter-spacing:.1em">{_e(label)}</span>
+                {'<span class="tag tag-active" style="font-size:.7rem">✦ Higher Ranked</span>' if is_winner else ''}
               </div>
-              <div style="font-weight:700;font-size:1rem;color:#0F172A">{snap['current_title']}</div>
-              <div style="font-size:.78rem;color:#64748B;margin:.15rem 0">
-                {r['candidate_id']} · {snap.get('current_company','—')} · {snap['years_of_experience']}y exp
+              <div style="font-weight:800;font-size:1.05rem;color:#0F172A;letter-spacing:-.02em;margin-bottom:.2rem">
+                {_e(snap['current_title'])}
               </div>
-              <div style="font-size:.78rem;color:#475569;margin:.2rem 0">📍 {snap['location']}</div>
-              <div style="font-size:1.5rem;font-weight:800;color:#1D4ED8;margin:.4rem 0">
-                {r['final_score']:.4f}
-                <span style="font-size:.75rem;font-weight:400;color:#64748B"> final score</span>
+              <div style="font-size:.8rem;color:#64748B;margin-bottom:.15rem">
+                {_e(snap.get('current_company','—'))} &nbsp;·&nbsp; {snap['years_of_experience']}y exp
               </div>
-              <div style="font-size:.78rem">
-                Confidence: <span class="{conf_cls_c}">{conf_c}</span>
+              <div style="font-size:.8rem;color:#64748B;margin-bottom:.4rem">
+                📍 {_e(snap['location'])}
               </div>
+              <div style="display:flex;align-items:baseline;gap:.45rem;margin:.1rem 0 .3rem">
+                <span style="font-size:1.75rem;font-weight:800;color:#1D4ED8;letter-spacing:-.03em;line-height:1">
+                  {r['final_score']:.3f}
+                </span>
+                <span style="font-size:.75rem;font-weight:400;color:#64748B">final score</span>
+              </div>
+              <div style="font-size:.8rem">Confidence: <span class="{conf_cls_c}">{conf_c}</span></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1065,9 +1939,9 @@ with tab_compare:
                             unsafe_allow_html=True)
                 skill_html = '<div style="margin:.2rem 0">'
                 for s in matched_c[:5]:
-                    skill_html += f'<span class="tag tag-skill">{s}</span> '
+                    skill_html += f'<span class="tag tag-skill">{_e(s)}</span> '
                 for s in missing_c[:3]:
-                    skill_html += f'<span class="tag tag-miss">− {s}</span> '
+                    skill_html += f'<span class="tag tag-miss">− {_e(s)}</span> '
                 skill_html += "</div>"
                 st.markdown(skill_html, unsafe_allow_html=True)
 
@@ -1078,23 +1952,23 @@ with tab_compare:
             _render_candidate_compare(rb, "Candidate B")
 
         # Side-by-side reasoning
-        st.markdown("---")
-        st.markdown("##### Recruiter Summary Comparison")
+        st.markdown('<div class="section-label" style="margin-top:1.25rem">Recruiter Summary Comparison</div>',
+                    unsafe_allow_html=True)
         rz_a, rz_b = st.columns(2)
         with rz_a:
             st.markdown(f"""
             <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;
                  padding:.8rem 1rem;font-size:.83rem;color:#1E3A5F;line-height:1.6">
-              <b>{ra['profile_snapshot']['current_title']} (#{ra['rank']})</b><br><br>
-              {ra.get('reasoning','—')}
+              <b>{_e(ra['profile_snapshot']['current_title'])} (#{ra['rank']})</b><br><br>
+              {_e(ra.get('reasoning','—'))}
             </div>
             """, unsafe_allow_html=True)
         with rz_b:
             st.markdown(f"""
             <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;
                  padding:.8rem 1rem;font-size:.83rem;color:#1E3A5F;line-height:1.6">
-              <b>{rb['profile_snapshot']['current_title']} (#{rb['rank']})</b><br><br>
-              {rb.get('reasoning','—')}
+              <b>{_e(rb['profile_snapshot']['current_title'])} (#{rb['rank']})</b><br><br>
+              {_e(rb.get('reasoning','—'))}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1108,12 +1982,13 @@ with tab_insights:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
-        _PLOT_FONT  = dict(family="Inter, sans-serif", size=12)
-        _PLOT_PAPER = "white"
+        _PLOT_FONT  = dict(family="Inter, sans-serif", size=12, color="#334155")
+        _PLOT_PAPER = "#FFFFFF"
         _PLOT_BG    = "#F8FAFC"
-        _PLOT_MAR   = dict(l=20, r=20, t=40, b=20)
+        _PLOT_MAR   = dict(l=20, r=20, t=44, b=20)
         _BLUE_SEQ   = "Blues"
-        _PRIMARY    = "#3B82F6"
+        _PRIMARY    = "#2563EB"
+        _TITLE_FONT = dict(family="Inter, sans-serif", size=14, color="#0F172A")
 
         scores_all  = [r["final_score"] for r in top100]
         titles_all  = [r["profile_snapshot"]["current_title"] for r in top100]
@@ -1161,7 +2036,7 @@ with tab_insights:
             fig_hist.update_layout(
                 paper_bgcolor=_PLOT_PAPER, plot_bgcolor=_PLOT_BG,
                 font=_PLOT_FONT, margin=_PLOT_MAR, showlegend=False,
-                title_font_size=14,
+                title_font=_TITLE_FONT,
             )
             mean_s = sum(scores_all) / len(scores_all)
             fig_hist.add_vline(x=mean_s, line_dash="dot", line_color="#94A3B8",
@@ -1277,18 +2152,19 @@ with tab_insights:
             st.plotly_chart(fig_radar, use_container_width=True)
 
         # ── Confidence breakdown table ─────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("##### Confidence Distribution")
+        st.markdown('<div class="section-label" style="margin-top:1rem">Confidence Distribution</div>',
+                    unsafe_allow_html=True)
         conf_counts = Counter(confs_all)
         cc1, cc2, cc3 = st.columns(3)
-        for col, level, color in [(cc1, "High", "#10B981"), (cc2, "Medium", "#F59E0B"), (cc3, "Low", "#EF4444")]:
+        _conf_kpi = {"High": "kpi-green", "Medium": "kpi-amber", "Low": "kpi-red"}
+        for col, level in [(cc1, "High"), (cc2, "Medium"), (cc3, "Low")]:
             count = conf_counts.get(level, 0)
             pct = count / len(top100) * 100
             col.markdown(f"""
-            <div class="metric-card">
-              <div class="metric-value" style="color:{color}">{count}</div>
-              <div class="metric-label">{level} Confidence</div>
-              <div class="metric-sub">{pct:.0f}% of top-100</div>
+            <div class="kpi-card {_conf_kpi[level]}">
+              <div class="kpi-value">{count}</div>
+              <div class="kpi-label">{level} Confidence</div>
+              <div class="kpi-sub">{pct:.0f}% of top-100</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1330,7 +2206,7 @@ with tab_eval:
         err   = ev.get("error_detection", {})
 
         # Format checks
-        st.markdown("#### Format & Sanity Checks")
+        st.markdown('<div class="section-label">Format &amp; Sanity Checks</div>', unsafe_allow_html=True)
         check_items = [
             ("Scores monotonically non-increasing", sc.get("scores_non_increasing", False)),
             ("Ranks 1–100 each appear exactly once", sc.get("ranks_unique_1_to_100", False)),
@@ -1339,44 +2215,57 @@ with tab_eval:
             ("No honeypots in top-100", sc.get("no_honeypots_in_top100", False)),
             (f"Top-10 ML/AI: {sc.get('top10_ml_candidates','?')}/10", sc.get("top10_ml_fraction", 0) >= 0.7),
         ]
-        cols = st.columns(3)
-        for i, (label, ok) in enumerate(check_items):
-            icon = "✅" if ok else "❌"
-            cols[i % 3].markdown(f"{icon} {label}")
+        all_pass = all(ok for _, ok in check_items)
+        check_html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem .75rem;margin:.5rem 0 1rem">'
+        for label, ok in check_items:
+            icon_color = "#16A34A" if ok else "#DC2626"
+            icon_char  = "✓" if ok else "✗"
+            check_html += f'''<div style="display:flex;align-items:center;gap:.4rem;
+                font-size:.875rem;color:#334155">
+              <span style="color:{icon_color};font-weight:700;font-size:1rem">{icon_char}</span>
+              {label}
+            </div>'''
+        check_html += '</div>'
+        st.markdown(check_html, unsafe_allow_html=True)
 
-        st.divider()
+        if all_pass:
+            st.markdown('<div class="alert-ok">All format checks passed. Submission is valid.</div>',
+                        unsafe_allow_html=True)
+
+        st.markdown('<div style="height:.5rem"></div>', unsafe_allow_html=True)
         col_l, col_r = st.columns(2)
 
         with col_l:
-            st.markdown("#### Top-10 Component Averages")
+            st.markdown('<div class="section-label">Top-10 Component Averages</div>', unsafe_allow_html=True)
             comp_avgs = t10.get("component_averages", {})
             for comp, val in comp_avgs.items():
                 label = comp.replace("_", " ").title()
                 color = _score_color(val)
                 pct = int(val * 100)
                 st.markdown(f"""
-                <div style="display:flex;justify-content:space-between;font-size:.84rem;padding:.22rem 0">
+                <div style="display:flex;justify-content:space-between;font-size:.875rem;
+                     padding:.28rem 0;color:#334155">
                   <span>{label}</span>
-                  <b style="color:{color}">{val:.3f}</b>
+                  <b style="color:{color};font-variant-numeric:tabular-nums">{val:.3f}</b>
                 </div>
                 <div class="bar-bg"><div class="bar-fill" style="width:{pct}%;background:{color}"></div></div>
                 """, unsafe_allow_html=True)
 
         with col_r:
-            st.markdown("#### Baseline Comparison")
+            st.markdown('<div class="section-label">Baseline Comparison</div>', unsafe_allow_html=True)
             if bl:
                 st.metric("Overlap @10 vs keyword model", f"{bl.get('overlap@10','?')}/10",
                           help="Low overlap = our model picks different (and better) candidates than keyword count")
                 st.metric("Overlap @25", f"{bl.get('overlap@25','?')}/25")
                 st.metric("Overlap @50", f"{bl.get('overlap@50','?')}/50")
                 if bl.get("summary"):
-                    st.markdown(f'<div style="font-size:.83rem;color:#374151">{bl["summary"]}</div>',
+                    st.markdown(f'<div style="font-size:.875rem;color:#334155;margin-top:.5rem">{bl["summary"]}</div>',
                                 unsafe_allow_html=True)
             else:
                 st.info("Rerun eval.py with `--candidates` to see baseline comparison.")
 
-        st.divider()
-        st.markdown("#### Error Detection")
+        st.markdown('<div class="section-label" style="margin-top:1rem">Error Detection</div>',
+                    unsafe_allow_html=True)
         errors = err.get("critical_errors", [])
         if errors:
             st.error(f"⚠ {len(errors)} critical error(s) found")
@@ -1391,3 +2280,102 @@ with tab_eval:
             st.warning(f"⚠ Top-10 title diversity low ({err.get('top10_title_diversity',0)} unique titles)")
         if not err.get("score_compression_warning") and not err.get("title_monotony_warning"):
             st.success("✓ No ranking anomalies detected")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 6 — Saved Shortlist
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_saved:
+    saved_ids = st.session_state.shortlist
+    saved_cands = [r for r in top100 if r["candidate_id"] in saved_ids]
+
+    if not saved_cands:
+        st.markdown("""
+        <div style="text-align:center;padding:3rem;color:#64748B">
+          <div style="font-size:2.5rem;margin-bottom:.75rem">📌</div>
+          <b>Your shortlist is empty.</b><br>
+          <span style="font-size:.875rem">Open "💡 Why this candidate?" on any card and click "Save to Shortlist".</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        sh_col1, sh_col2 = st.columns([3, 1])
+        with sh_col1:
+            st.markdown(f"""
+            <div style="font-size:1rem;font-weight:700;color:#0F172A;margin:.3rem 0 .2rem">
+              Shortlisted Candidates
+              <span style="font-size:.82rem;font-weight:400;color:#64748B;margin-left:.6rem">
+                {len(saved_cands)} saved · ready to export or share
+              </span>
+            </div>
+            """, unsafe_allow_html=True)
+        with sh_col2:
+            def _export_shortlist():
+                buf = io.StringIO()
+                writer = _csv.writer(buf)
+                writer.writerow(["rank", "candidate_id", "score", "title", "company", "yoe", "confidence", "reasoning", "notes"])
+                for r in saved_cands:
+                    snap = r["profile_snapshot"]
+                    writer.writerow([
+                        r["rank"], r["candidate_id"], round(r["final_score"], 4),
+                        snap.get("current_title",""), snap.get("current_company",""),
+                        snap.get("years_of_experience",0), r.get("confidence",""),
+                        r.get("reasoning",""), st.session_state.recruiter_notes.get(r["candidate_id"],""),
+                    ])
+                return buf.getvalue()
+            st.download_button(
+                "⬇️ Export Shortlist CSV",
+                data=_export_shortlist(),
+                file_name="shortlist.csv",
+                mime="text/csv",
+            )
+
+        for result in saved_cands:
+            rank  = result["rank"]
+            cid   = result["candidate_id"]
+            score = result["final_score"]
+            snap  = result["profile_snapshot"]
+            title = snap["current_title"]
+            yoe   = snap["years_of_experience"]
+            co    = snap.get("current_company", "")
+            loc   = snap.get("location", "")
+            conf  = result.get("confidence", "Medium")
+            reasoning = result.get("reasoning", "")
+            note = st.session_state.recruiter_notes.get(cid, "")
+            color = _score_color(score)
+            score_class = _pill_class(score)
+            rank_accent = {1: "cand-card-gold", 2: "cand-card-silver", 3: "cand-card-bronze"}.get(rank, "")
+            loc_tag = f'<span class="tag tag-loc">📍 {_e(loc)}</span>' if loc else ""
+            conf_cls = _conf_class(conf)
+            note_html = (f'<div style="margin-top:.35rem;font-size:.78rem;color:#6B7280;'
+                         f'font-style:italic">{_e(note)}</div>') if note else ""
+
+            st.markdown(f"""
+            <div class="cand-card {rank_accent}">
+              <div style="display:flex;align-items:flex-start;gap:.9rem">
+                <div class="rank-badge {_rank_class(rank)}">#{rank}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.25rem">
+                    <span style="font-weight:700;color:#0F172A;font-size:1.0rem">{_e(title)}</span>
+                    <span class="tag tag-conf">{conf} confidence</span>
+                    {loc_tag}
+                  </div>
+                  <div style="font-size:.8rem;color:#64748B;margin:.05rem 0 .4rem">
+                    {_e(co)} &nbsp;·&nbsp; {yoe}y exp &nbsp;·&nbsp;
+                    <span style="font-family:monospace;font-size:.75rem;color:#94A3B8">{_e(cid)}</span>
+                  </div>
+                  <div style="font-size:.875rem;color:#334155;line-height:1.6">{_e(reasoning)}</div>
+                  {note_html}
+                </div>
+                <div style="flex-shrink:0;text-align:right;min-width:72px;padding-left:.5rem">
+                  <span class="{score_class}">{score:.3f}</span>
+                  {_bar(score, color)}
+                </div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            rem_col, _ = st.columns([1, 5])
+            with rem_col:
+                if st.button("Remove", key=f"rm_{cid}"):
+                    st.session_state.shortlist.discard(cid)
+                    st.rerun()

@@ -68,3 +68,26 @@ desktop.ini
 *.tmp
 *.bak
 *.orig
+
+# Large organizer dataset — place locally, not committed to repo
+data/raw/candidates.jsonl
+data/raw/candidates_SYNTHETIC_BACKUP.jsonl
+Organizer data/
+
+# QA screenshots and internal audit reports generated during development
+qa_*.png
+dqa_*.png
+BROWSER_VERIFICATION_REPORT.md
+CHANGELOG_FINAL.md
+DESTRUCTIVE_QA_REPORT.md
+FINAL_*.md
+UI_BUG_TRACKER.md
+
+# OMC / Playwright local orchestration state
+.omc/
+.playwright-mcp/
+
+# Intermediate and scratch outputs
+outputs/team_signalrank.csv
+data/qa_fixtures/
+docs/screenshots/

@@ -90,12 +90,15 @@ scoring:
 
   # Sub-weights within the behavioral component. Must sum to 1.0.
   behavioral_sub_weights:
-    recency: 0.30
-    open_to_work: 0.15
-    response_rate: 0.20
-    notice_period: 0.15
-    interview_completion: 0.10
-    github_activity: 0.10
+    recency: 0.25
+    open_to_work: 0.10
+    response_rate: 0.17
+    response_speed: 0.06
+    notice_period: 0.13
+    interview_completion: 0.08
+    github_activity: 0.09
+    recruiter_demand: 0.08
+    active_seeking: 0.04
 
   # -------------------------------------------------------------------------
   # Skill Match Component
@@ -167,6 +170,33 @@ scoring:
 
   # Score when github_activity_score = -1 (no GitHub linked)
   behavioral_github_missing_score: 0.20
+
+  # -------------------------------------------------------------------------
+  # Behavioral: Recruiter Demand (saved_by_recruiters_30d)
+  # How many recruiters bookmarked this candidate in last 30 days.
+  # -------------------------------------------------------------------------
+  behavioral_recruiter_demand:
+    thresholds: [1, 4, 8]
+    scores: [0.15, 0.45, 0.78, 1.00]
+
+  # -------------------------------------------------------------------------
+  # Behavioral: Response Speed (avg_response_time_hours)
+  # Lower is better — faster replies = more engaged candidate.
+  # -------------------------------------------------------------------------
+  behavioral_response_speed:
+    thresholds_hours: [6, 24, 48]
+    scores: [1.00, 0.70, 0.35, 0.10]
+
+  # Default score when avg_response_time_hours is missing
+  behavioral_response_speed_missing_score: 0.50
+
+  # -------------------------------------------------------------------------
+  # Behavioral: Active Job Seeking (applications_submitted_30d)
+  # Higher = candidate is actively looking, not passively browsing.
+  # -------------------------------------------------------------------------
+  behavioral_active_seeking:
+    thresholds: [0, 2, 5]
+    scores: [0.15, 0.55, 0.85, 1.00]
 
   # -------------------------------------------------------------------------
   # Behavioral: Notice Period Tiers

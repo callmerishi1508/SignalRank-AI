@@ -14,7 +14,7 @@ github_repo: "https://github.com/callmerishi1508/SignalRank-AI"
 
 sandbox_link: "https://huggingface.co/spaces/signalrank-ai/redrob-ranker"
 
-reproduce_command: "python rank.py --candidates ./candidates.jsonl --out ./submission.csv --json ./outputs/debug.json"
+reproduce_command: "python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python rank.py --candidates ./candidates.jsonl --out ./submission.csv --json ./outputs/debug.json"
 
 compute:
   platform: "MacBook Pro (Apple Silicon)"
@@ -24,10 +24,11 @@ compute:
   os: "macOS"
   uses_gpu_for_inference: false
   has_network_during_ranking: false
-  pre_computation_required: false
-  pre_computation_time_minutes: 0
-  first_run_time_seconds: 19
-  cached_run_time_seconds: 6
+  pre_computation_required: true
+  pre_computation_note: "One-time embedding of 100K candidates (~15 min on Apple M-series CPU). Saved to disk; subsequent ranking runs skip re-encoding."
+  pre_computation_time_seconds: 892
+  cached_run_time_seconds: 60
+  ranking_step_only_seconds: "<60"
 
 ai_tools_used:
   - "Claude (Anthropic) — architecture design, code review, implementation guidance"
@@ -68,7 +69,7 @@ methodology_summary: |
   contradictions, stated-YOE vs actual span, all-expert-with-maxed-endorsements,
   all-behavioral-signals-at-maximum, duration-inflation, impossible education dates.
 
-  Runtime: ~19s cold / ~6s cached for 2,000 candidates. Zero API calls.
+  Runtime: ~848s first run (100K embedding pre-computation, saved to disk) / ~60s cached runs. Zero API calls.
 
 declarations:
   read_submission_spec: true

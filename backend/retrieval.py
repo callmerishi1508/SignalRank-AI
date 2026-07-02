@@ -150,6 +150,20 @@ class _EmbeddingCache:
         source_path: Path,
         index: Optional["faiss.Index"] = None,
     ) -> None:
+        # Don't overwrite a larger cache with a smaller one (guards against
+        # concurrent Streamlit uploads clobbering the full CLI cache).
+        if self._meta_path.exists():
+            try:
+                existing = json.loads(self._meta_path.read_text())
+                if existing.get("n_candidates", 0) > len(candidate_ids):
+                    logger.info(
+                        f"[cache] skipping save: existing cache has {existing['n_candidates']} "
+                        f"candidates, new has {len(candidate_ids)} — keeping larger cache"
+                    )
+                    return
+            except Exception:
+                pass
+
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         np.save(str(self._emb_path), embeddings.astype(np.float32))
         np.save(str(self._ids_path), np.array(candidate_ids, dtype=object))
@@ -295,8 +309,8 @@ class SemanticRetriever:
     # -----------------------------------------------------------------------
 
     def _jd_embedding_text(self) -> str:
-        from backend.jd_parser import JD_TEXT_FOR_EMBEDDING
-        return JD_TEXT_FOR_EMBEDDING
+        from backend.jd_parser import get_active_jd_embedding_text
+        return get_active_jd_embedding_text()
 
     # -----------------------------------------------------------------------
     # Fit (encode + index all candidates)
@@ -306,6 +320,7 @@ class SemanticRetriever:
         self,
         profiles: List[CandidateProfile],
         source_path: Optional[Path] = None,
+        force_reencode: bool = False,
     ) -> None:
         """
         Encode all candidate profiles and build retrieval indices.
@@ -313,6 +328,7 @@ class SemanticRetriever:
         Args:
             profiles: All parsed candidates.
             source_path: Path to candidates.jsonl (used for cache invalidation).
+            force_reencode: If True, skip loading cache but still save after encoding.
         """
         t0 = time.time()
         use_backend = self._resolve_backend()
@@ -322,7 +338,7 @@ class SemanticRetriever:
         ids = [cp.candidate_id for cp in profiles]
 
         if use_backend in ("embedding", "embedding+rrf"):
-            self._fit_embedding(profiles, texts, ids, source_path)
+            self._fit_embedding(profiles, texts, ids, source_path, force_reencode=force_reencode)
 
         if use_backend in ("tfidf", "embedding+rrf"):
             self._fit_tfidf(texts, ids)
@@ -347,10 +363,11 @@ class SemanticRetriever:
         texts: List[str],
         ids: List[str],
         source_path: Optional[Path],
+        force_reencode: bool = False,
     ) -> None:
         cache = _EmbeddingCache(self.cache_path, self.model_name, self.persist_index)
 
-        if self.cache_enabled and source_path and cache.is_valid(source_path):
+        if not force_reencode and self.cache_enabled and source_path and cache.is_valid(source_path):
             logger.info("[retrieval] loading embeddings from cache")
             embeddings, cached_ids = cache.load()
             self._faiss_index = cache.load_index()
@@ -386,9 +403,9 @@ class SemanticRetriever:
             cache.save(embeddings, ids, source_path, index=save_index)
 
     def _fit_tfidf(self, texts: List[str], ids: List[str]) -> None:
-        from backend.jd_parser import JD_TEXT_FOR_TFIDF
+        from backend.jd_parser import get_active_jd_tfidf_text
         logger.info("[retrieval] fitting TF-IDF vectoriser")
-        all_texts = [JD_TEXT_FOR_TFIDF] + texts
+        all_texts = [get_active_jd_tfidf_text()] + texts
         self._tfidf_vectorizer = TfidfVectorizer(
             ngram_range=self.tfidf_ngram,
             max_features=self.tfidf_max_features,
@@ -527,6 +544,7 @@ class SemanticRetriever:
         profiles: List[CandidateProfile],
         source_path: Optional[Path] = None,
         min_pool_size: int = 100,
+        force_reencode: bool = False,
     ) -> RetrievalResult:
-        self.fit(profiles, source_path=source_path)
+        self.fit(profiles, source_path=source_path, force_reencode=force_reencode)
         return self.retrieve(profiles, min_pool_size=min_pool_size)

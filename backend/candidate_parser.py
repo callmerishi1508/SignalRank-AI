@@ -170,7 +170,10 @@ def _build_profile_text(raw: Dict) -> str:
             parts.append(desc)
 
     # Skills
-    skill_names = [str(s.get("name", "")).strip() for s in raw.get("skills", [])]
+    skill_names = [
+        str(s.get("name", "")).strip() if isinstance(s, dict) else str(s).strip()
+        for s in raw.get("skills", [])
+    ]
     skill_names = [n for n in skill_names if n]
     if skill_names:
         parts.append("Skills: " + ", ".join(skill_names))
@@ -229,6 +232,13 @@ def parse_candidate(raw: Dict) -> CandidateProfile:
     if not cid:
         raise ValueError(f"candidate_id missing in record: {str(raw)[:120]}")
 
+    # Normalize string skills to dicts so all downstream code can safely call .get()
+    if raw.get("skills"):
+        raw["skills"] = [
+            s if isinstance(s, dict) else {"name": str(s)}
+            for s in raw["skills"]
+        ]
+
     profile_dict = raw.get("profile", {})
     career = raw.get("career_history", [])
     skills = raw.get("skills", [])
@@ -250,9 +260,9 @@ def parse_candidate(raw: Dict) -> CandidateProfile:
 
     # --- Skill names ---
     skill_names_lower = [
-        str(s.get("name", "")).lower().strip()
+        (str(s.get("name", "")).lower().strip() if isinstance(s, dict) else str(s).lower().strip())
         for s in skills
-        if s.get("name")
+        if (s.get("name") if isinstance(s, dict) else s)
     ]
 
     # --- Days since active ---

@@ -31,7 +31,7 @@ from typing import Optional
 from backend.candidate_parser import load_candidates_list, CandidateProfile
 from backend.config_loader import load_config
 from backend.honeypot import detect_honeypot
-from backend.jd_parser import JD_PROFILE
+from backend.jd_parser import get_active_jd_profile
 from backend.retrieval import SemanticRetriever
 from backend.scorer import score_candidates_bulk
 from backend.explainer import generate_reasoning
@@ -71,6 +71,12 @@ def run_pipeline(
     profiles = load_candidates_list(candidates_path)
     log.info(f"Loaded {len(profiles):,} candidates in {time.time()-t0:.1f}s")
 
+    if len(profiles) == 0:
+        raise ValueError(
+            "No valid candidates were parsed from the file. "
+            "Ensure the file is a non-empty JSONL where each line is a candidate record."
+        )
+
     if len(profiles) < 100:
         log.warning(f"Only {len(profiles)} candidates — need ≥100 for submission")
 
@@ -92,9 +98,10 @@ def run_pipeline(
     log.info("Running semantic retrieval...")
     t2 = time.time()
 
-    source_path = None if no_cache else Path(candidates_path)
-    retriever = SemanticRetriever(config=cfg, jd=JD_PROFILE)
-    result = retriever.fit_and_retrieve(profiles, source_path=source_path)
+    source_path = Path(candidates_path)
+    jd = get_active_jd_profile()
+    retriever = SemanticRetriever(config=cfg, jd=jd)
+    result = retriever.fit_and_retrieve(profiles, source_path=source_path, force_reencode=no_cache)
 
     log.info(
         f"Retrieval done in {time.time()-t2:.1f}s | backend={result.backend_used} "
@@ -110,7 +117,7 @@ def run_pipeline(
     pool_raw = [cp.raw for cp in result.profiles]
     ranked = score_candidates_bulk(
         pool_raw,
-        jd=JD_PROFILE,
+        jd=jd,
         similarities=result.similarities,
         config=cfg,
     )

@@ -78,7 +78,9 @@ def _activity_phrase(sig: Dict) -> str:
         if notice <= 7:
             notice_str = "immediate joiner"
         elif notice <= 15:
-            notice_str = f"{notice}-day notice"
+            notice_str = f"short notice: {notice} days"
+        elif notice <= 25:
+            notice_str = f"short {notice}-day notice"
         elif notice <= 30:
             notice_str = f"{notice}-day notice"
         else:
@@ -86,12 +88,18 @@ def _activity_phrase(sig: Dict) -> str:
 
     parts = [p for p in [activity, "open to work" if otw else "", notice_str] if p]
     response = ""
-    if isinstance(rrr, (int, float)) and rrr >= 0.80:
+    if isinstance(rrr, (int, float)) and rrr >= 0.90:
+        response = f"exceptional {rrr:.0%} response rate"
+    elif isinstance(rrr, (int, float)) and rrr >= 0.80:
         response = f"{rrr:.0%} response rate"
     elif isinstance(rrr, (int, float)) and 0 <= rrr < 0.20:
         response = f"low response rate ({rrr:.0%})"
     if response:
         parts.append(response)
+    # Recruiter demand signal — surface high demand as a trust signal
+    saved = sig.get("saved_by_recruiters_30d")
+    if isinstance(saved, (int, float)) and saved >= 8:
+        parts.append(f"saved by {int(saved)} recruiters this month")
     return ", ".join(parts)
 
 
@@ -179,7 +187,7 @@ def _skill_phrase(top_skills: List[Dict]) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _production_led(candidate: Dict, components: Dict) -> str:
-    """Lead with what was built and shipped."""
+    """Lead with current role, then production evidence, then unique signals."""
     profile = candidate.get("profile", {})
     career = candidate.get("career_history", [])
     skills = candidate.get("skills", [])
@@ -191,21 +199,33 @@ def _production_led(candidate: Dict, components: Dict) -> str:
     current_co = profile.get("current_company", "")
     top = _top_jd_skills(skills, 4)
 
-    if snippet and company:
-        s1 = (f"At {company} ({role}), demonstrated clear production impact: "
-              f"{snippet[0].lower() + snippet[1:]}.")
-    elif current_co:
-        s1 = f"{current_title} at {current_co} with {yoe:.0f} years shipping ML systems to production."
+    # Lead with current role (always unique per candidate)
+    if current_title and current_co:
+        s1 = f"{current_title} at {current_co} ({yoe:.0f}y ML/AI experience)."
     else:
         s1 = f"{yoe:.0f} years of production ML/AI engineering experience."
 
+    # Production evidence from past (may overlap across candidates — present as support)
+    if snippet and company:
+        if current_co and company.lower() == current_co.lower():
+            s2 = f"Production track record: {snippet[0].lower() + snippet[1:]}."
+        else:
+            s2 = (f"At {company} ({role}), demonstrated production impact: "
+                  f"{snippet[0].lower() + snippet[1:]}.")
+    else:
+        s2 = ""
+
     skill_str = _skill_phrase(top)
-    s2 = f"Technical depth in {skill_str}." if skill_str else ""
+    if skill_str:
+        s3 = (f"Brings {yoe:.0f}y ML/AI depth; strongest in {skill_str}."
+              if yoe >= 8 else f"Technical depth in {skill_str}.")
+    else:
+        s3 = f"{yoe:.0f}-year ML/AI engineering track record." if yoe >= 8 else ""
 
     avail = _activity_phrase(sig)
-    s3 = f"Currently {avail}." if avail else ""
+    s4 = f"Currently {avail}." if avail else ""
 
-    return " ".join(p for p in [s1, s2, s3] if p)
+    return " ".join(p for p in [s1, s2, s3, s4] if p)
 
 
 def _skills_led(candidate: Dict, components: Dict) -> str:
