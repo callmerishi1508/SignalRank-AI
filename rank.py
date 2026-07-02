@@ -50,6 +50,7 @@ def run_pipeline(
     output_csv: str,
     output_json: Optional[str] = None,
     no_cache: bool = False,
+    jd_override=None,
 ) -> None:
     """
     End-to-end ranking pipeline.
@@ -59,6 +60,8 @@ def run_pipeline(
         output_csv: Path to write submission CSV.
         output_json: Optional path to write full debug JSON.
         no_cache: If True, ignore existing embedding cache and rebuild.
+        jd_override: Optional JobProfile to use instead of the active global JD.
+                     Pass this from the UI to avoid shared-global race conditions.
     """
     t0 = time.time()
     cfg = load_config()
@@ -99,7 +102,7 @@ def run_pipeline(
     t2 = time.time()
 
     source_path = Path(candidates_path)
-    jd = get_active_jd_profile()
+    jd = jd_override if jd_override is not None else get_active_jd_profile()
     retriever = SemanticRetriever(config=cfg, jd=jd)
     result = retriever.fit_and_retrieve(profiles, source_path=source_path, force_reencode=no_cache)
 

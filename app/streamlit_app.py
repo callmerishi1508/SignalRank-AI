@@ -441,17 +441,25 @@ button[data-testid="baseButton-secondary"] {
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
+import uuid as _uuid
+
 for _k, _v in [
     ("results", None),
     ("pipeline_stats", None),
     ("selected_idx", 0),
     ("shortlist", set()),         # set of candidate_ids saved by recruiter
     ("recruiter_notes", {}),      # candidate_id → note string
-    ("parsed_jd", None),          # ParsedJD from jd_parser.parse_jd_text()
+    ("parsed_jd", None),          # ParsedJD extracted dict from jd_parser.parse_jd_text()
+    ("parsed_jd_profile", None),  # actual JobProfile object (thread-safe, per-session)
     ("jd_mode", "demo"),          # "demo" | "custom"
+    ("session_id", str(_uuid.uuid4())[:8]),  # unique per browser session
 ]:
     if _k not in st.session_state:
         st.session_state[_k] = _v
+
+# Base output directory — configurable via SIGNALRANK_OUTPUTS env var for production
+_OUTPUTS_BASE = Path(os.environ.get("SIGNALRANK_OUTPUTS", "outputs"))
+_OUTPUTS_BASE.mkdir(parents=True, exist_ok=True)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -501,62 +509,25 @@ def load_results_from_json(path: str) -> bool:
         return False
 
 
-def run_pipeline_on_upload(uploaded_file) -> bool:
+def _session_output_paths():
+    """Return session-scoped output paths so concurrent users don't overwrite each other."""
+    sid = st.session_state.get("session_id", "default")
+    session_dir = _OUTPUTS_BASE / sid
+    session_dir.mkdir(parents=True, exist_ok=True)
+    return str(session_dir / "results.csv"), str(session_dir / "results.json")
+
+
+def _active_jd_profile():
+    """Return the per-session JobProfile (thread-safe — never reads the shared global)."""
+    from backend.jd_parser import JD_PROFILE
+    return st.session_state.get("parsed_jd_profile") or JD_PROFILE
+
+
+def _run_pipeline_core(tmp_path: str, no_cache: bool = False) -> bool:
+    """Shared pipeline runner — session-scoped outputs, explicit JD, proper progress UI."""
     from rank import run_pipeline
 
-    raw_bytes = uploaded_file.read()
-    try:
-        content = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        st.error("File must be UTF-8 encoded.")
-        return False
-
-    first_lines = [ln.strip() for ln in content.splitlines() if ln.strip()][:3]
-
-    if not first_lines:
-        st.error("The uploaded file is empty. Please upload a non-empty candidates.jsonl file.")
-        return False
-
-    for ln in first_lines:
-        try:
-            obj = json.loads(ln)
-        except json.JSONDecodeError:
-            st.error(
-                "The file contains invalid JSON on one of the first lines. "
-                "Check that each line is a complete, valid JSON object."
-            )
-            return False
-        if not isinstance(obj, dict):
-            st.error(
-                "Expected JSONL where each line is a JSON object (dict). "
-                f"Got {type(obj).__name__} instead. Check the file format."
-            )
-            return False
-
-    # Count valid candidate-looking lines before committing to the pipeline
-    all_lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
-    valid_count = 0
-    for ln in all_lines:
-        try:
-            obj = json.loads(ln)
-            if isinstance(obj, dict) and obj.get("candidate_id"):
-                valid_count += 1
-        except (json.JSONDecodeError, ValueError):
-            pass
-    if valid_count == 0:
-        st.error(
-            "No valid candidate records found in the file. "
-            "Each line must be a JSON object with a 'candidate_id' field matching the expected schema."
-        )
-        return False
-
-    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False, mode="w", encoding="utf-8") as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    out_csv = "outputs/submission.csv"
-    out_json = "outputs/debug.json"
-    os.makedirs("outputs", exist_ok=True)
+    out_csv, out_json = _session_output_paths()
 
     stages = [
         ("Parsing candidates", 12),
@@ -572,88 +543,16 @@ def run_pipeline_on_upload(uploaded_file) -> bool:
     t0 = time.time()
 
     try:
-        for stage_name, target_pct in stages[:2]:
-            status_text.markdown(
-                f'<div class="alert-info">⏳ <b>{stage_name}…</b></div>',
-                unsafe_allow_html=True
-            )
-            progress_bar.progress(target_pct)
-            time.sleep(0.04)
-
-        run_pipeline(tmp_path, out_csv, out_json)
-
-        for stage_name, target_pct in stages[2:]:
-            status_text.markdown(
-                f'<div class="alert-info">⏳ <b>{stage_name}…</b></div>',
-                unsafe_allow_html=True
-            )
-            progress_bar.progress(target_pct)
-            time.sleep(0.04)
-
-        progress_bar.progress(100)
-        elapsed = time.time() - t0
-        status_text.markdown(
-            f'<div class="alert-ok">⚡ <b>Pipeline complete in {elapsed:.1f}s</b> — '
-            f'100 candidates ranked and ready for review.</div>',
-            unsafe_allow_html=True
-        )
-        st.session_state.pipeline_stats = {"elapsed": elapsed, "csv": out_csv, "json": out_json}
-        return load_results_from_json(out_json)
-
-    except Exception as exc:
-        status_text.empty()
-        progress_bar.empty()
-        print(f"[SignalRank] pipeline error: {exc}", file=sys.stderr)
-        st.error(
-            "The pipeline could not process this file. "
-            "Verify each line is a JSON object with a 'candidate_id' field and retry."
-        )
-        return False
-    finally:
-        os.unlink(tmp_path)
-
-
-def _run_pipeline_on_candidate_dicts(candidates: List[Dict]) -> bool:
-    """Write a list of candidate dicts to a temp JSONL file and run the pipeline."""
-    from rank import run_pipeline
-
-    if not candidates:
-        st.error("No candidates to rank.")
-        return False
-
-    out_csv = "outputs/submission.csv"
-    out_json = "outputs/debug.json"
-    os.makedirs("outputs", exist_ok=True)
-
-    with tempfile.NamedTemporaryFile(
-        suffix=".jsonl", delete=False, mode="w", encoding="utf-8"
-    ) as tmp:
-        for c in candidates:
-            tmp.write(json.dumps(c, ensure_ascii=False) + "\n")
-        tmp_path = tmp.name
-
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    t0 = time.time()
-
-    stages = [
-        ("Parsing resumes", 15),
-        ("Detecting honeypots", 25),
-        ("Building semantic index", 65),
-        ("Scoring candidates", 80),
-        ("Generating explanations", 92),
-        ("Writing outputs", 100),
-    ]
-    try:
         for stage_name, pct in stages[:2]:
             status_text.markdown(
                 f'<div class="alert-info">⏳ <b>{stage_name}…</b></div>',
                 unsafe_allow_html=True,
             )
             progress_bar.progress(pct)
-            time.sleep(0.04)
+            time.sleep(0.03)
 
-        run_pipeline(tmp_path, out_csv, out_json, no_cache=True)
+        run_pipeline(tmp_path, out_csv, out_json,
+                     no_cache=no_cache, jd_override=_active_jd_profile())
 
         for stage_name, pct in stages[2:]:
             status_text.markdown(
@@ -663,18 +562,94 @@ def _run_pipeline_on_candidate_dicts(candidates: List[Dict]) -> bool:
             progress_bar.progress(pct)
             time.sleep(0.03)
 
+        progress_bar.progress(100)
         elapsed = time.time() - t0
         status_text.markdown(
-            f'<div class="alert-ok">⚡ <b>Ranked {len(candidates)} candidates in {elapsed:.1f}s</b></div>',
+            f'<div class="alert-ok">⚡ <b>Pipeline complete in {elapsed:.1f}s</b> — '
+            f'candidates ranked and ready for review.</div>',
             unsafe_allow_html=True,
         )
         st.session_state.pipeline_stats = {"elapsed": elapsed, "csv": out_csv, "json": out_json}
         return load_results_from_json(out_json)
+
     except Exception as exc:
         status_text.empty()
         progress_bar.empty()
+        print(f"[SignalRank] pipeline error: {exc}", file=sys.stderr)
         st.error(f"Pipeline error: {exc}")
         return False
+
+
+def run_pipeline_on_upload(uploaded_file) -> bool:
+    from rank import run_pipeline
+
+    raw_bytes = uploaded_file.read()
+    try:
+        content = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        st.error("File must be UTF-8 encoded.")
+        return False
+
+    first_lines = [ln.strip() for ln in content.splitlines() if ln.strip()][:3]
+    if not first_lines:
+        st.error("The uploaded file is empty.")
+        return False
+
+    for ln in first_lines:
+        try:
+            obj = json.loads(ln)
+        except json.JSONDecodeError:
+            st.error("Invalid JSON on one of the first lines. Check the file format.")
+            return False
+        if not isinstance(obj, dict):
+            st.error(f"Expected JSONL (one JSON object per line). Got {type(obj).__name__}.")
+            return False
+
+    all_lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+    valid_count = sum(
+        1 for ln in all_lines
+        if _safe_json_has_cid(ln)
+    )
+    if valid_count == 0:
+        st.error("No valid candidate records found. Each line must have a 'candidate_id' field.")
+        return False
+
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False, mode="w", encoding="utf-8") as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        return _run_pipeline_core(tmp_path)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+def _safe_json_has_cid(ln: str) -> bool:
+    try:
+        obj = json.loads(ln)
+        return isinstance(obj, dict) and bool(obj.get("candidate_id"))
+    except (json.JSONDecodeError, ValueError):
+        return False
+
+
+def _run_pipeline_on_candidate_dicts(candidates: List[Dict]) -> bool:
+    """Write a list of candidate dicts to a temp JSONL file and run the pipeline."""
+    if not candidates:
+        st.error("No candidates to rank.")
+        return False
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".jsonl", delete=False, mode="w", encoding="utf-8"
+    ) as tmp:
+        for c in candidates:
+            tmp.write(json.dumps(c, ensure_ascii=False) + "\n")
+        tmp_path = tmp.name
+
+    try:
+        return _run_pipeline_core(tmp_path, no_cache=True)
     finally:
         try:
             os.unlink(tmp_path)
@@ -1034,9 +1009,8 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         if st.button("Use Demo JD", key="jd_use_demo", use_container_width=True):
-            from backend.jd_parser import set_active_jd
-            set_active_jd(None)
             st.session_state.parsed_jd = None
+            st.session_state.parsed_jd_profile = None
             st.session_state.jd_mode = "demo"
             st.success("Using demo JD (Redrob Senior AI Engineer)")
 
@@ -1072,12 +1046,13 @@ with st.sidebar:
             if not _jd_to_parse:
                 st.warning("Paste or upload a job description first.")
             else:
-                from backend.jd_parser import parse_jd_text, set_active_jd
+                from backend.jd_parser import parse_jd_text
                 with st.spinner("Parsing…"):
                     try:
                         _parsed = parse_jd_text(_jd_to_parse)
-                        set_active_jd(_parsed)
+                        # Store profile in session state — never in shared global
                         st.session_state.parsed_jd = _parsed.extracted
+                        st.session_state.parsed_jd_profile = _parsed.profile
                         st.session_state.jd_mode = "custom"
                         st.success(f"Active JD: **{_parsed.profile.title}**")
                     except Exception as _exc:
@@ -1167,15 +1142,16 @@ with st.sidebar:
 
     # ── 4. Export ──────────────────────────────────────────────────────────────
     st.markdown('<div class="sidebar-section">Export</div>', unsafe_allow_html=True)
-    for label, path, mime in [
-        ("📥 Submission CSV", "outputs/submission.csv", "text/csv"),
-        ("📄 Full Debug JSON", "outputs/debug.json", "application/json"),
-        ("📊 Eval Report", "outputs/eval_report.json", "application/json"),
+    _s_csv, _s_json = _session_output_paths()
+    for label, path, mime, fname in [
+        ("📥 Ranked CSV", _s_csv, "text/csv", "ranked_candidates.csv"),
+        ("📄 Full JSON", _s_json, "application/json", "ranked_candidates.json"),
+        ("📊 Eval Report", str(_OUTPUTS_BASE / "eval_report.json"), "application/json", "eval_report.json"),
     ]:
         p = Path(path)
         if p.exists():
             with open(p, encoding="utf-8") as f:
-                st.download_button(label, data=f.read(), file_name=p.name, mime=mime,
+                st.download_button(label, data=f.read(), file_name=fname, mime=mime,
                                    use_container_width=True)
 
     st.markdown('<div class="sidebar-section">System Info</div>', unsafe_allow_html=True)
@@ -1190,9 +1166,13 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 
-# ── Auto-load ─────────────────────────────────────────────────────────────────
+# ── Auto-load — try session path first, then shared demo results ──────────────
 if st.session_state.results is None:
-    load_results_from_json("outputs/debug.json")
+    _sess_csv, _sess_json = _session_output_paths()
+    if not load_results_from_json(_sess_json):
+        # Fall back to shared demo results (pre-computed for the demo preset)
+        _demo_json = str(_OUTPUTS_BASE / "debug.json")
+        load_results_from_json(_demo_json)
 
 if st.session_state.results is None:
     st.markdown("""

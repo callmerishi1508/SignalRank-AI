@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Large data files — mount as volumes in production
+data/raw/candidates.jsonl
+data/raw/candidates_SYNTHETIC_BACKUP.jsonl
+outputs/embedding_cache/
+*.npy
+*.faiss
+
+# Generated outputs — written at runtime, not baked in
+outputs/debug*.json
+outputs/eval_report.json
+outputs/*.csv
+
+# Development artifacts
+.omc/
+.playwright-mcp/
+*.png
+*.jpg
+qa_*.png
+dqa_*.png
+docs/screenshots/
+
+# Tests (not needed at runtime)
+tests/
+.pytest_cache/
+.coverage
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/

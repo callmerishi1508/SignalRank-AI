@@ -91,3 +91,24 @@ UI_BUG_TRACKER.md
 outputs/team_signalrank.csv
 data/qa_fixtures/
 docs/screenshots/
+
+# Internal planning / audit docs not meant for the public repo
+ARCHITECTURE_DECISION.md
+DATASET_ANALYSIS.md
+DEMO_SCRIPT.md
+IMPLEMENTATION_PLAN.md
+JUDGE_FAQ.md
+RELEASE_NOTES.md
+REVIEW_REPORT.md
+SUBMISSION_AUDIT.md
+submission_metadata.yaml
+
+# All screenshots at repo root
+*.png
+*.jpg
+*.jpeg
+
+# Environment secrets
+.env
+.env.local
+.env.production
