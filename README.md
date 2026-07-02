@@ -4,7 +4,7 @@ Intelligent candidate ranking for any role, at scale.
 
 SignalRank AI is a hybrid pipeline that reads a job description, understands what the role actually needs, evaluates candidates holistically across seven evidence-grounded dimensions, and produces a recruiter-trustworthy ranked shortlist with transparent reasoning for every candidate.
 
-Built as a submission for the **Redrob Intelligent Candidate Discovery & Ranking Challenge 2026**.
+Built for the **Redrob Intelligent Candidate Discovery & Ranking Challenge 2026**.
 
 ---
 
@@ -297,20 +297,6 @@ retrieval:
 
 ---
 
-## Submission details
-
-| Field | Value |
-|---|---|
-| Challenge | Redrob Intelligent Candidate Discovery & Ranking 2026 |
-| Team | SignalRank-AI |
-| Contact | jvm12@iitbbs.ac.in |
-| Dataset | 100,000 candidates (organizer-provided) |
-| Output | `outputs/submission.csv` — 100 rows, ranks 1–100, non-increasing scores |
-| Validation | `python scripts/validate_submission.py outputs/submission.csv` → `Submission is valid.` |
-| Honeypots in top-100 | 0 |
-| Compute | CPU only, no network during ranking, Apple M-series 8-core |
-
----
 
 ## Dependencies
 
